@@ -1,0 +1,818 @@
+---
+title: "Election Project"
+Author: "Margaret Chen, Kimberly Kao, Kimberly Tze, Christine Puthoff, Eugene Heimann"
+output: html_document
+---
+
+# Introduction
+
+The results of the 2016 election presented one of the most major electoral upsets in recent history, where the Republican candidate pulled off a surprising win over his more favored Democratic opponent. For this project, we seek to provide a comprehensive debriefing of the 2016 election through a presentation of demographic and past election trends.
+
+We first collect and compile county-wide election and census data, cleaning out and matching any inconsistencies among the counties. Then we provide exploratory data analysis by looking for correlations between demography and favored parties. In the maps section, we represent the election results and examine trends, or breaks in trends, on a year-by-year basis.
+
+Following these observations, we create two predictor functions using recursive partitioning and K-NN separately that test the relevance of our data in predicting election results. Factors such as race, income level, and education prove informative, as usual, and boost the accuracy of our results. At the same time, however, they yield misclassifications in surprising areas, compared to the actual election results. These misclassifications are especially interesting when taking into consideration the atypical election season that is 2016, and we explore and hypothesize more of the potential underlying reasons of these misclassifications in the Discussion section.
+
+
+```{r setup, echo = FALSE, include=FALSE}
+library(ggplot2)
+library(RColorBrewer)
+library(knitr)
+library(maps)
+library(grid)
+library(gridExtra)
+library(rpart)
+library(rpart.plot)
+library(treeClust)
+library(class)
+library(scales)
+load("C:/Users/Margaret/Desktop/School/UC Berkeley/2016 Fall/Stats 133/Project II/finalMerge-1.rda")
+```
+
+# Data Description
+
+author: Kimberly Kao
+
+There are several variables to compare with party vote: race, education level, language spoken at home, place of birth, and income levels. Because our census data is from 2010, we chose to use the data from election 2008 as demographics are more likely to be similar compared to election 2004 or 2016. We chose to use election 2008 over 2012 because we have the absolute number of third party votes for 2008. Since our numbers for party votes and other census data variables were absolute numbers, we calculated proportions to compare different variables (numeric vectors) and used these to also create factor variables for tracking whether there was a majority of some variable.
+
+There is a clear relationship between proportion of white and black populations with proportion of Democratic and GOP votes: counties with greater proportions of white populations tended to have a GOP win while counties with greater proportions of black populations tended to have a Democratic win. One point to keep in mind is that we had 1,532 counties that were missing values for black population, so our plot uses a significantly smaller dataset. 
+
+We also examined the relationship between education levels and party win. We separated counties into groups with an above average high school or college educated population. This was done by using the national average high school graduation rate and college enrollment rate in 2008. We found that comparing counties with an above average high school education population proportion with those below average showed no definitive relationship with party vote as both groups had a greater proportion of GOP wins. When we examined college education levels, we found that the group of above average college educated counties have a roughly even proportion of party wins (proportion of counties with GOP and Democratic wins are roughly the same).
+
+We then created compared language spoken at home and place of birth with party vote, but they also do not provide a clear pattern. Comparing proportion of population with a middle class income (35-150k) with party vote did not show a clear pattern, but when we included another variable (whether the county had a white majority), we could see that counties with higher proportions of low income population groups with no white majority tended to have greater proportions of Democratic vote. 
+
+## Introduction
+We create several plots for comparing different variables with party vote. We chose to use the data from election 2008 as the demographics in 2008 are more likely to be similar to the data collected from the 2010 census.
+
+## Exploring the distribution of Democratic and GOP votes
+We create a quantile-quantile plot.
+
+```{r, echo = FALSE}
+finalMerge$propDem2008 = finalMerge$Obama2008/(finalMerge$Obama2008 + finalMerge$McCain2008 + finalMerge$Other2008)
+finalMerge$propGOP2008 = finalMerge$McCain2008/(finalMerge$Obama2008 + finalMerge$McCain2008 + finalMerge$Other2008)
+
+qx = quantile(finalMerge$propDem2008, probs = seq(0, 1, 0.001))
+qy = quantile(finalMerge$propGOP2008, probs = seq(0, 1, 0.001))
+party <- data.frame(qx, qy)
+ggplot(data = party, mapping = aes(x = qx, y = qy)) +
+  geom_point(size = 1, alpha = 0.5) + labs(x="Proportion of Democratic Vote", y="Proportion of GOP Vote")
+```
+Analysis:
+
+The bend in the curve indicates a difference in the two distributions. It appears that proportion of Democratic votes has a longer right tail compared to GOP. In the next few sections, we explore various variables and the difference in party vote.
+
+## Exploring Race
+We want to examine the relationship between race and party vote majority.
+
+Here, we create 2 scatterplots:
+(1) Comparing proportion of white population with proportion of Democratic vote
+(2) Comparing proportion of black population with proportion of Democratic vote
+(3) We also create a scatterplot taking into account voter turnout in comparing party win and white/black population for election 2008.
+
+```{r, echo = FALSE}
+finalMerge$propWhite = finalMerge$White.Population / finalMerge$Total.Population
+finalMerge$propBlack = finalMerge$Black.Population / finalMerge$Total.Population
+
+# Comparing white population and Democratic vote
+ggplot(finalMerge) + geom_point(aes(x = propWhite, y = propDem2008), position = 'jitter', size = 1, alpha = 0.5) + labs(x = "Proportion of White Population", y = "Proportion of Democratic Vote", title="White Population and Party Win")
+# Comparing white population and GOP vote
+ggplot(finalMerge) + geom_point(aes(x = propWhite, y = propGOP2008), position = 'jitter', size = 1, alpha = 0.5) + labs(x = "Proportion of White Population", y = "Proportion of GOP Vote", title="White Population and Party Win")
+
+# Comparing black population and Democratic vote
+ggplot(finalMerge) + geom_point(aes(x = propBlack, y = propDem2008), position = 'jitter', size = 1, alpha = 0.5) + labs(x = "Proportion of Black Population", y = "Proportion of Democratic Vote", title="Black Population and Party Win")
+# Comparing black population and GOP vote
+ggplot(finalMerge) + geom_point(aes(x = propBlack, y = propGOP2008), position = 'jitter', size = 1, alpha = 0.5) + labs(x = "Proportion of Black Population", y = "Proportion of GOP Vote", title="Black Population and Party Win")
+
+# Factor vector with labels GOPWin and DemoWin, representing which party won the county
+finalMerge$partyWin = factor(finalMerge$Obama2008 > finalMerge$McCain2008, labels = c("GOP Win", "Democratic Win"))
+
+# Vector getting proportion of voter turnout
+finalMerge$voterTurnout2008 = (finalMerge$Obama2008 + finalMerge$McCain2008 + finalMerge$Other)/finalMerge$Total.Population
+
+# Comparing proportion of white population with voter turnout, colored by party win
+ggplot(finalMerge) + geom_point(aes(x = propWhite, y = voterTurnout2008, color = partyWin), position = 'jitter', size = 1, alpha = 0.5) + labs(x = "Proportion of White Population", y = "Voter Turnout Rate", title="White Population and Party Win")
+```
+Conclusion:
+The scatterplots indicate that counties with a larger white population have a larger proportion of GOP votes and smaller proportion of Democratic votes.
+
+We are missing 1532 values for black population, so our plots uses a smaller subset of our dataframe. From the plots created, we can see that counties with a larger black population have a smaller proportion of GOP votes and smaller proportion of Democratic votes. Voter turnout rate affects little change of the relationship between party vote and race.
+
+## Exploring Education Levels
+Here, we want to know: Is high school graduation rate a factor? Is college education a factor?
+
+http://www.edweek.org/ew/dc/2013/gradrate_trend.html
+National high school graduation rate in 2009-2010 was 74.7%.
+We use this rate in calculating whether a county has above average proportion of high school educated population.
+
+https://www.washingtonpost.com/news/education/wp/2015/11/24/college-enrollment-rates-are-dropping-especially-among-low-income-students/
+National college graduation rate in 2008 was 69%.
+We use this rate in calculating whether a county has above average proportion of college educated population.
+
+We attempted to create scatterplots for:
+(1) Comparing proportion of college educated in population above 25 years old and party vote
+- Bachelor's, Master's, PHD's, and beyond are grouped together.
+(2) Comparing proportion of at least high school educated in population above 25 years old  and party vote.
+
+Howvever, the scatterplots did not provide information about any relationship, so we also create a side-by-side barplot for comparing number of voters in each education level and party vote.
+
+```{r, echo = FALSE}
+# Factor vector containing whether a county population has majority white population. False if otherwise.
+finalMerge$whiteMajority = factor(finalMerge$propWhite > 0.5, labels=c("No White Majority", "White Majority"))
+
+# Population with college education.
+finalMerge$numCollege = apply(finalMerge[, 38:41], 1, sum)
+
+# Vector containing proportion of college educated over population over 25 years old
+finalMerge$propCollege = finalMerge$numCollege/finalMerge[[34]]
+
+# Population that has at least high school diploma.
+finalMerge$numHS = apply(finalMerge[, 37:41], 1, sum)
+
+# Comparing proportion of Democratic vote and proportion of college educated population and whether county has white majority
+ggplot(finalMerge) + geom_point(aes(x = propDem2008, y = propCollege, color = whiteMajority), position = 'jitter', size = 1, alpha = 0.5) + labs(x = "Proportion of  Democratic Vote", y = "Proportion of College Educated", title="Democratic Vote and College Educated Population")
+
+# Boolean vector that is true if county has above average proportion of population with high school diploma.
+finalMerge$hsMajority = factor(finalMerge$numHS > 0.747 * finalMerge$Education...Population.25.years.and.over, labels=c("Proportion below average", "Proportion above average"))
+
+# Boolean vector that is true if county has above average proportion of population with college degree.
+finalMerge$collegeMajority = factor(finalMerge$numCollege > 0.69 * finalMerge$Education...Population.25.years.and.over, labels=c("Proportion below average", "Proportion above average"))
+
+# Compare education levels with party vote
+color = brewer.pal(6, "BrBG")
+# High school education majority
+ggplot(finalMerge[!is.na(finalMerge$hsMajority), ], aes(hsMajority, fill=partyWin)) + geom_bar( position="dodge", width=0.5) + labs(x="Proportion of Population with at least a high school education", y= "Number of Counties", title="High School Educated Population and Party Win") + scale_fill_manual(values = color, name = "Party Win")
+# College education majority
+ggplot(finalMerge[!is.na(finalMerge$collegeMajority), ], aes(collegeMajority, fill=partyWin)) + geom_bar( position="dodge", width=0.5) + labs(x="Proportion of population with college education", y= "Number of Counties", title="College Educated Population and Party Win") + scale_fill_manual(values = color, name = "Party Win")
+```
+
+Initially we tried creating a scatterplot to compare college educated and party vote. However, this plot showed no relationship, so we decided to use a side-by-side bar graph instead. However, it appears through the bar plot that a the counties with a below average proportion of high school educated population show a similar pattern with counties with above average proportion in that both groups have more counties with GOP win. There is a roughly even proportion of counties with GOP and Democratic win in the group of counties with an above average proportion of college educated population.
+
+## Exploring Place of Birth
+
+We attempted to find a relationship between place of birth and party vote using a scatterplot. However, there appears little relationship to be found by using county profile data as most voters are native-born.
+
+```{r, echo = FALSE}
+finalMerge$propNative = finalMerge[[42]]/finalMerge[[41]]
+ggplot(finalMerge) + geom_point(aes(x = propDem2008, y = propNative), position = 'jitter', size = 1, alpha = 0.5) + labs(x = "Democratic Vote 2008", y = "Proportion of Native Population", title="Native Population and Party Win")
+```
+## Exploring Language Spoken at Home
+
+We compare proportion of population with English proficiency with party vote.
+
+(1) Comparing proportion of population with English as only language with party vote.
+(2) Comparing proportion of Spanish speakers with party vote.
+- We use the population who speak Spanish at home and speak English less than very well.
+
+However, the scatterplots indicate trivial relationship as most voters primarily speak English at home.
+
+```{r, echo = FALSE}
+finalMerge$propEngPrimary = finalMerge[[49]]/finalMerge$Total.Population
+# Comparing English-speaking only population and party vote
+ggplot(finalMerge) + geom_point(aes(x = propDem2008, y = propEngPrimary), position = 'jitter', size = 1) + labs(x = "Proportion of Democratic Win 2008", y = "Proportion who only speak English Language", title="English as Primary Language Population and Party Win")
+
+# Spanish speaking population
+finalMerge$propSpanish = apply(finalMerge[, 52:53], 1, sum)/finalMerge$Total.Population
+ggplot(finalMerge) + geom_point(aes(x = propDem2008, y = propSpanish), position = 'jitter', size = 1) + labs(x = "Proportion of Democratic Win 2008", y = "Proportion of Population Who Speak Spanish", title="Proportion of Spanish Speaking Population and Party Win")
+```
+
+## Exploring Income Levels
+
+We create a side-by-side barplot to explore whether a county has a majority middle class income range has a relationship with party vote. We also create a scatterplot to compare proportion of population in the lower 2 income brackets (10-25k) with proportion of Democratic vote.
+
+```{r, echo = FALSE}
+# Proportion of middle class income (35-150k) vs party vote
+finalMerge$majorityMiddle = factor((finalMerge[[65]]+finalMerge[[66]]+finalMerge[[67]]+finalMerge[[68]]+finalMerge[[69]])/finalMerge[[60]] > 0.5, labels=c("Proportion below 0.5", "Proportion at least 0.5"))
+
+color = brewer.pal(6, "BrBG")
+
+# Comparing income levels and party vote
+ggplot(finalMerge[!is.na(finalMerge$majorityMiddle), ], aes(majorityMiddle, fill=partyWin)) + geom_bar(position="dodge", width=0.5) + labs(x="Proportion of Population with Income between 35-150k", y="Number of Counties", title="Proportion of Population with Middle Class Income and Party Win") + scale_fill_manual(values = color, name = "Party Win")
+
+# Comparing income range 0-25k and party vote and race
+finalMerge$prop0.15k = (finalMerge[[61]]+finalMerge[[62]]+finalMerge[[63]])/finalMerge[[60]]
+ggplot(finalMerge) + geom_point(aes(x = prop0.15k, y = propDem2008, color = whiteMajority), position = 'jitter', size = 1) + labs(x = "Proportion of households with income range 0-25k", y = "Proportion of Democratic Vote", title="Lower Income Range and Party Vote")
+```
+Analysis: When we compare the proportion of population in the lower income ranges with party vote colored by whether the county had a white majority population, we found that the counties without a white majority population had a larger proportion of Democratic vote.
+
+
+
+#Maps
+author: Margaret Chen
+
+This part of the code extracts information from the maps package and matches it with the final merges data frame that the team has created. To make matching easier, we also extracted the FIPS information from the maps package to match with the maps package counties. Using the FIPS code, then, we merge the data frame created through the maps package and our final election/census/location data frame.
+
+```{r, echo = FALSE}
+
+#prepare map_data("county") data for merge
+mapCountyData = map_data("county")
+mapCountyData$id = gsub('[[:blank:]|[:punct:]]', '', ignore.case = TRUE, paste(mapCountyData$region, mapCountyData$subregion))
+mapCountyData$order_id = 1:nrow(mapCountyData)
+
+#match with FIPS in maps package
+data("county.fips")
+mapCountyFIPS = county.fips
+names(mapCountyFIPS) = c("fips", "id")
+mapCountyFIPS$id = gsub('[[:blank:]|[:punct:]]', '', mapCountyFIPS$id)
+
+#add FIPS information to maps package county data through the FIPS codes provided by the maps pacakge
+mapCounty = merge(x = mapCountyData, y = mapCountyFIPS, by = "id", all.x = TRUE)
+
+#assign FIPS to counties that are left out, using FIPS codes we have in our finalMerge data frame and matching by id's
+mapCounty$fips[is.na(mapCounty$fips)] = finalMerge$fips[match(mapCounty$id[is.na(mapCounty$fips)], finalMerge$id, nomatch = FALSE)]
+
+#merge with election/census/longitude-latitude data
+finalMerge_maps = merge( x = finalMerge, y = mapCounty, by = "fips", all = TRUE )
+finalMerge_maps = finalMerge_maps[order(finalMerge_maps$order_id), ]
+names(finalMerge_maps)[which(names(finalMerge_maps) %in% c("id.x", "id.y"))] = c("id_finalMerge", "id_mapCounty")
+#names(finalMerge_maps)[c(2, 71)] = c("id_finalMerge", "id_mapCounty") #with total_votes2004
+```
+
+## Finding Missing Counties
+Using the data frame created in the previous section, we can plot the county data using ggplot2 and geom_poly(). The map is plotted with the fill aesthetics equated to a factor, so that if the county is not matched with the rest of the data frame, the county is colored in red. At the same time, to test that the longitude/latitude data makes sense, we've overlapped the plots on the map. Some vectors are also provided with desired results next to them.
+
+In addition, the list "missingValues" is also created to spot any NAs in each column of the finalMerge_maps data frame where there exists an id_mapCounty. In other words, we're looking for counties (as defined by the maps package) that have missing information in terms of census data, election data, etc. A more detailed explanation of the result is provided below the code chunk.
+
+```{r, echo = FALSE}
+
+#Preparation for plotting
+stateMapdata = map_data("state")
+stateBorders = geom_polygon(data = stateMapdata, aes(x = long, y = lat, group = group), fill = NA, color = "White", size = 1)
+
+no_background = theme_bw() + theme(
+  axis.text = element_blank(),
+  axis.line = element_blank(),
+  axis.ticks = element_blank(),
+  panel.border = element_blank(),
+  panel.grid = element_blank(),
+  axis.title = element_blank()
+)
+
+#Highlight Missing Counties
+unmatchedtoMapCounties = is.na(finalMerge_maps$id_finalMerge)
+missingCounties = ggplot() + geom_polygon(data = finalMerge_maps, aes(x = long, y = lat, group = group), fill = as.numeric(unmatchedtoMapCounties) + 1) + no_background + coord_fixed(1.3)
+missingCounties    #a completely black map means that there are no missing counties; mismatched counties should be highlighted in red
+
+addCountyLocation = missingCounties + geom_point(data = finalMerge_maps, aes(x = as.numeric(county_longitude), y = as.numeric(county_latitude)), color = "Yellow", size = 0.2) + no_background + coord_fixed(1.3)
+addCountyLocation
+
+naInfinalMerge = unique(finalMerge_maps$id_mapCounty[is.na(finalMerge_maps$id_finalMerge)]) #mapCounty counties that have NA entries for finalMerge counties ==> the counties that didn't get plotted to the map
+naInfinalMerge #should be an empty vector
+
+#any other missing values
+missingValues = list()
+for (i in 1:ncol(finalMerge_maps)){
+  missingValues[[i]] = unique(finalMerge_maps$id_mapCounty[is.na(finalMerge_maps[i])])
+  names(missingValues)[i] = names(finalMerge_maps)[i]
+}
+
+missingValues = sapply(missingValues, unique) #delete duplicates
+
+```
+
+"The missingValues list contains mostly empty vectors, with a few exceptions. We do not worry about them for the following reasons. The precint numbers for 2008 indicates there is missing information for Washington D.C., but since D.C. is essentially a city, this information is naturally missing - it's implied that, if D.C. is reported, "all" of its precincts are reported. On the other hand, census data appears to all be missing for three Texas counties: Kenedy, King, and Loving. According to their Wikipedia pages (cited at the end of this report), however, they are three of the least populous counties in the United States, with Loving County being the least populous at 82 people. For this reason, it is likely that certain demographic information becomes hard to calculate in the census. Within the census information also, there is 1527 missing values for the black population. Since African-Americans remain a minority in the United States, it is likely that many of these counties simply do not have significant black populations. The same goes for the entries that indicate NA's for white populations.
+
+## Election Results by Year, Size of Relative Lead, Size of Absolute Lead
+
+This section is dedicated to plotting each of the four election results by the size of lead relative to each county's population and by the size of lead in terms of absolute votes.
+
+There are two helper functions provided in the code to plot the data by relative lead and by absolute lead. The relative lead function takes in the size of lead, normalized by each county's population, and is transformed into a factor that is then plotted into ggplot. Each county is shaded in, with darker shades representing a relatively larger margin won (blue for Democrats, red for Republicans).
+
+The absolute lead function, on the other hand, takes in the absolute margin won and a logical factor determining either it is a Democratic win (marked by TRUE) or a Republican win (marked by FALSE). This map plots a blue or red circle, representing a Democratic or Republican win respectively, with the size of the circle corresponding to the size of the final margin. The county names of the counties with the largest Republican margin and the largest Democratic margin are also provided in red and blue text, respectively.
+
+Note that there should be an NA value for the Bedford City, Virginia data in 2016. The county/independent city was merged back to Bedford County in 2013. (source: https://en.wikipedia.org/wiki/Bedford,_Virginia)
+
+Analysis of the maps are provided at the bottom of this code chunk.
+
+```{r, echo = FALSE, fig.height = 7, fig.width = 12}
+
+#Relative Lead Function
+plotMap = function(sizeLead){
+  
+  #the lead size is converted into a factor by rounding the size of lead in the two extremes (round down a negative number, round up a positive number) to avoid rounding to zero unless the lead is zero
+  sizeLead = factor(ifelse(sizeLead > 0, ceiling(sizeLead/0.2)*0.2, floor(sizeLead/0.2)*0.2))
+  
+  #a color palette is chosen so that if the votes yield a dead tie, there is an extra color for that county
+  if(length(levels(sizeLead))%%2 != 0){
+    color = colorRampPalette( brewer.pal(9, "RdBu") )(length(levels(sizeLead)))
+  } else {
+    color = colorRampPalette( brewer.pal(8, "RdBu") )(length(levels(sizeLead)))
+  }
+  
+  #plotting the map
+  ggplot() + geom_polygon(data = finalMerge_maps, aes(x = long, y = lat, group = group, fill = sizeLead), color = "Gray", size = 0.5) + scale_fill_manual(values = color) + stateBorders + no_background
+                                                                                                                                  
+}
+
+
+#Absolute Lead Function
+plotMapPop = function(sizeLeadPop, winner){
+  
+  #assigning any NA values to zero so they would not interfere with the max() function later
+  sizeLeadPop[is.na(sizeLeadPop)] = 0 
+  
+  #plot the function
+  ggplot() + 
+    
+    #plot county and state map
+    geom_polygon(data = finalMerge_maps, aes(x = long, y = lat, group = group), fill = "cornsilk", color = "Grey", size = 0.5) +
+    geom_polygon(data = stateMapdata, aes(x = long, y = lat, group = group), fill = NA, color = "Black", size = 0.5) +
+    
+    #plot points, where the size of the points are scaled by the amount of absolute lead
+    geom_point(data = finalMerge, aes(x = county_longitude, y = county_latitude, color = winner, size = sizeLeadPop), alpha = 0.3) + 
+    labs(size = "Size of Lead") +
+    scale_size_area(max_size = max(sizeLeadPop[!is.na(sizeLeadPop)])/32000) + scale_color_manual(values = c("firebrick2", "dodgerblue2"), labels = c("Republican Win", "Democratic Win"), guide = guide_legend(title = "Winning Party")) +
+
+    #find the county with the maximum lead of each party and label the counties by name
+    geom_text(data = finalMerge[winner, ][which.max(sizeLeadPop[winner]), ], aes(x = county_longitude, y = county_latitude, label = county_nameLongLat), color = "dodgerblue4", size = 5) + #democratic county
+    geom_text(data = finalMerge[!winner, ][which.max(sizeLeadPop[!winner]), ], aes(x = county_longitude, y = county_latitude, label = county_nameLongLat), color = "darkred", size = 5) + #republican county
+    
+    no_background
+  
+}
+
+
+#2004 Election Results
+sizeLead2004 = (finalMerge_maps$kerryVote - finalMerge_maps$bushVote)/(finalMerge_maps$kerryVote + finalMerge_maps$bushVote) #NOTE: NO TOTAL VOTES FIGURE
+results2004 = plotMap(sizeLead2004) + labs(title = 
+                      "2004 Election Results by Size of Relative Lead")
+
+winner2004 = finalMerge$kerryVote > finalMerge$bushVote
+sizeLeadPop2004 = abs(finalMerge$kerryVote - finalMerge$bushVote)
+resultsPop2004 = plotMapPop(sizeLeadPop2004, winner2004) + labs(title = "2004 Election Results by Size of Absolute Lead")
+
+results2004
+resultsPop2004
+
+
+#2008 Election Results
+sizeLead2008 = (finalMerge_maps$Obama2008 - finalMerge_maps$McCain2008) / (finalMerge_maps$Obama2008 + finalMerge_maps$McCain2008 + finalMerge_maps$Other2008)
+results2008 = plotMap(sizeLead2008) + labs(title = 
+                      "2008 Election Results by Size of Relative Lead")
+
+winner2008 = finalMerge$Obama2008 > finalMerge$McCain2008
+sizeLeadPop2008 = abs(finalMerge$Obama2008 - finalMerge$McCain2008)
+resultsPop2008 = plotMapPop(sizeLeadPop2008, winner2008) + labs(title = "2008 Election Results by Size of Absolute Lead")
+
+results2008
+resultsPop2008
+
+
+#2012 Election Results
+sizeLead2012 = (finalMerge_maps$obamaVotes2012 - finalMerge_maps$romneyVotes2012)/(finalMerge_maps$totalVotes2012)
+results2012 = plotMap(sizeLead2012) + labs(title = 
+                      "2012 Election Results by Size of Relative Lead")
+
+winner2012 = finalMerge$obamaVotes2012 > finalMerge$romneyVotes2012
+sizeLeadPop2012 = abs(finalMerge$obamaVotes2012 - finalMerge$romneyVotes2012)
+resultsPop2012 = plotMapPop(sizeLeadPop2012, winner2012) + labs(title = "2012 Election Results by Size of Absolute Lead")
+
+results2012
+resultsPop2012
+
+
+#2016 Election Results
+sizeLead2016 = (finalMerge_maps$votes_dem2016 - finalMerge_maps$votes_gop2016)/(finalMerge_maps$total_votes2016)
+results2016 = plotMap(sizeLead2016) + labs(title = 
+                      "2016 Election Results by Size of Relative Lead")
+
+winner2016 = finalMerge$votes_dem2016 > finalMerge$votes_gop2016
+sizeLeadPop2016 = abs(finalMerge$votes_dem2016 - finalMerge$votes_gop2016)
+resultsPop2016 = plotMapPop(sizeLeadPop2016, winner2016) + labs(title = "2016 Election Results by Size of Absolute Lead")
+
+results2016
+resultsPop2016
+
+```
+
+###Analysis
+
+Democrats tend to have leads over Republicans in coastal areas and large cities. Republicans' stretch tends to be more spread out among the rural states, with fewer leads over all. For the 2016 election especially, there is a resurgence of Republican support along the Appalachian Mountain counties that had been present since 2004 but really did seem to consolidate at around 2012. Democrats, on the other hand, seem to be diminishing their leads in the MidWest, especially from the 2008 election and the Obama Coalition.
+
+The Absolute Lead maps also hint at some polarization in the United States, where the counties that are previously Republican and Democratic gain ever-larger leads in their respective neighborhoods, with the possible exception of the 2008 election. The effects are most striking when comparing the 2004 election, for which there is a relatively sparse map, to the 2016 election, in which leads in highly Democratic and Republican counties are increased, as shown by the more crowded map. This may be part of the reason why our predictor functions were able to turn out a relatively high prediction rate.
+
+Another potentially interesting point is the presence of third parties. Since the data size for third parties are relatively small, it's most likely not advisable to do detailed analysis of each state. What is clear, however, is the steady rise in the portion of votes that third parties take up from 2008 to 2016 (2004 data is unavailable), which may have muddled our predictors and prevented a more accurate result. In addition, the combination of large portions of third-party votes and the polarization in the 2016 election may signal general discontent Americans have with the current state of the country.
+
+
+## Third Party
+
+```{r third party, echo = FALSE, fig.height = 7, fig.width = 12}
+
+#Third Party Votes Function
+plotMapThirdParty = function(sizeVote){
+  
+  sizeVote = cut(sizeVote, breaks = c(0, 0.01, 0.025, 0.05, 0.075, 0.1, 0.3, 0.5))
+  color = brewer.pal(length(levels(sizeVote)), "Oranges")
+
+  #plotting the function
+  ggplot() + geom_polygon(data = finalMerge_maps, aes(x = long, y = lat, group = group, fill = sizeVote), color = "Gray", size = 0.5) + scale_fill_manual(values = color, labels = c("<1%", "1% to 2.5%", "2.5% to 5%", "5% to 7.5%", "7.5% to 10%", "10% to 30%", "30% to 50%")[1:length(levels(sizeVote))], guide = guide_legend(title = "Percentage Won")) + stateBorders + no_background
+
+  }
+
+finalMerge_maps$thirdParty2008 = finalMerge_maps$Other2008  / (finalMerge_maps$Obama2008 + finalMerge_maps$McCain2008 + finalMerge_maps$Other2008)
+thirdPar2008Labs = labs(title = "Size of Third-Party Votes in 2008")
+thirdPar2008Graph = plotMapThirdParty(finalMerge_maps$thirdParty2008) + thirdPar2008Labs
+
+finalMerge_maps$thirdParty2012 = (finalMerge_maps$totalVotes2012 - finalMerge_maps$obamaVotes2012 - finalMerge_maps$romneyVotes2012) / finalMerge_maps$totalVotes2012
+thirdPar2012Labs = labs(title = "Size of Third-Party Votes in 2012")
+thirdPar2012Graph = plotMapThirdParty(finalMerge_maps$thirdParty2012) + thirdPar2012Labs
+
+finalMerge_maps$thirdParty2016 = (finalMerge_maps$total_votes2016 - finalMerge_maps$votes_dem2016 - finalMerge_maps$votes_gop2016) / finalMerge_maps$total_votes2016
+thirdPar2016Labs = labs(title = "Size of Third-Party Votes in 2016")
+thirdPar2016Graph = plotMapThirdParty(finalMerge_maps$thirdParty2016) + thirdPar2016Labs
+
+thirdPar2008Graph
+thirdPar2012Graph
+thirdPar2016Graph
+
+```
+
+#Predicting the 2016 Results (Christine and Eugene)
+
+We used recursive partitioning with 2-fold cross validation to predict 2016 results.  A factor variable of Democrat or Republican was created to show the winning party. Other variables used are 2012 election outcomes, Census 2010 data, and state names to train our predictor. We implemented 2-fold cross validation by state meaning that we split the counties in each state. Half the counties in the state are then used as the training data and the other half as the testing data and then this would be repeated with the folds switched. Instead of using a matrix, a list was used to create the folds to account for the fact that not all the folds will be equal. After training the data, we calculate the misclassification rates of the cross validated folds. These are plotted and the max is chosen which is .007 for our specific complexity parameter. This complexity parameter is used to create the final tree structure. The 2016 data is then tested with this tree and then the misclassification rate is calculated to be about .91 which did better than the training data. Another data frame was created to aid in looking at the nodes that each county landed in.
+
+This methodology would simulate the hypothetical situation of a pre-2016 election prediction of outcome.  Although all census variables were used to train, only a select few were actually used in the predictor.  The predictor used State name, Language spoken at home, White population, Black population, Total population, $10-15k income, <$10k income, and Place of Birth.  Our predictor was especially inaccurate for predicting Maine because Obama won all but one county in Maine during 2012, but in 2016 many previously blue counties voted for Trump.  In fact, because Obama won so overwhelmingly our predictor predicted all of Maine’s counties go Blue.  
+
+The State variable tends to be higher up in the tree, which makes sense since they are such overarching distinct classifications. It is interesting to note that the 4 largest nodes are all Republican. Perhaps this could parallel to how typically Democrats come from more diverse demographics and Republicans being more homogenous in demographics
+
+```{r, echo = FALSE}
+#Create a winner vector from 2012 and 2016
+result2012 = factor(x = (finalMerge$romneyVotes2012 < finalMerge$obamaVotes2012), levels = c(TRUE, FALSE), labels = c('Democratic', 'Republican'))
+result2016 = factor(x = (finalMerge$votes_dem2016 > finalMerge$votes_gop2016), levels = c(TRUE, FALSE), labels = c("Democratic", "Republican"))
+#Create a dataframe of Training Data from 2012
+trainData_2012 = data.frame("Winner" = result2012, "State" = finalMerge$state, row.names = finalMerge$id, stringsAsFactors = FALSE)
+trainData_2012 = cbind(trainData_2012, finalMerge[,seq(from = 31, to = 70)])
+
+#Create a dataframe of Test Data from 2016
+testData_2016 = data.frame("Winner" = result2016, "State" = finalMerge$state, stringsAsFactors = FALSE)
+testData_2016 = cbind(testData_2016, finalMerge[,seq(from = 31, to = 70)])
+```
+
+```{r, echo = FALSE}
+#Separate the folds such that each State's counties are about evenly distributed between folds
+set.seed(10000)
+index_1 = numeric()
+index_2 = numeric()
+for (sName in unique(trainData_2012$State)){
+    index_depth = min(which(sName == trainData_2012$State)) - 1
+    folds = sample(sum(trainData_2012$State == sName))
+    crease = floor(length(folds)/2)
+    index_1 = c(index_1, (folds[seq(crease)] + index_depth))
+    index_2 = c(index_2, (folds[-seq(crease)] + index_depth))
+}
+#Check that every number from 1 to 3109 is there correctly
+sum(index_1) + sum(index_2) == nrow(trainData_2012)*(nrow(trainData_2012)+1)/2
+#create a list of incides
+index = list(index_1, index_2)
+```
+
+```{r, echo = FALSE}
+#Use lab 8 code as guide for building predictor
+cps = c(seq(0.0001, 0.001, by = 0.0001), 
+       seq(0.001, 0.01, by = 0.001),
+       seq(0.01, 0.1, by = 0.01))
+preds = matrix(nrow = nrow(trainData_2012), ncol = length(cps))
+for (i in c(1, 2)) {
+  testFold = index[[i]]
+  trainFold = index[[-i]]
+  for (j in 1:length(cps)) {
+    tree = rpart(Winner ~ .,
+            data = trainData_2012[trainFold, -2], 
+            method = "class",
+            control = rpart.control(cp = cps[j]))
+    preds[testFold, j] = 
+      predict(tree, 
+              newdata = trainData_2012[testFold, -c(1, 2)],
+              type = "class")
+  }
+}
+```
+
+```{r, echo = FALSE}
+# Misclassification rates for cross validated folds
+cvRates = apply(preds, 2, function(oneSet) {
+  sum(oneSet == as.numeric(trainData_2012$Winner)) / nrow(trainData_2012) 
+})
+```
+
+```{r, echo = FALSE}
+# determine what complexity parameter to use
+which.max(cvRates)
+cp = cps[which.max(cvRates)]
+```
+
+```{r, echo = FALSE}
+cvRes = data.frame(cps, cvRates)
+ggplot(data = cvRes, aes(x = cps, y = cvRates)) +
+  geom_line() +
+  labs(x = "Complexity Parameter", y = "Classification Rate")
+```
+
+```{r, echo = FALSE}
+# Use chosen cp rate to predict 2016 data
+cpChoice = cp
+finalTree = rpart(Winner ~ .,
+                  data = trainData_2012, 
+                  method = "class",
+                  control = rpart.control(cp = cpChoice))
+   
+testPreds = predict(finalTree, 
+              newdata = testData_2016,
+              type = "class")
+
+classRate = sum(testPreds == testData_2016$Winner, na.rm =TRUE) / 
+  nrow(testData_2016)
+
+classRate
+```
+
+```{r, echo = FALSE}
+#Look at the Classification Tree
+prp(finalTree, extra = 2, tweak = 2.2, varlen = -3, compress = TRUE, ycompress = TRUE)
+```
+
+```{r, echo = FALSE}
+#Look at the leaves each county ended up in
+leafLoc = rpart.predict.leaves(finalTree, testData_2016)
+leafName = row.names(finalTree$frame[leafLoc, ])
+leafName = gsub("[//.].*", "", leafName)
+leafData1 = finalTree$frame[leafLoc, "yval2"][ , c(4, 5)]
+leafData = pmax(leafData1[ , 1], leafData1[ , 2])
+correct = factor(testData_2016$Winner == testPreds, c(TRUE, FALSE), labels = c("yes", "no"))
+countyLeaf = data.frame(finalMerge$County, finalMerge$State, leafName, finalTree$frame[leafLoc, "n"], leafData, finalTree$frame[leafLoc, "yval2"][ , 6], testPreds, testData_2016$Winner, correct)
+colnames(countyLeaf) = c("county", "state", "leafName", "numObs", "leafPurity", "leafProb", "pred", "actual", "correct")
+countyLeafMis = countyLeaf[countyLeaf$pred != countyLeaf$actual, ]
+```
+
+## Map K-NN Predictor
+
+The follow code maps out where the predictor function produced incorrect classifications.
+
+```{r, echo = FALSE, fig.height = 7, fig.width = 12}
+#Recursive Partitioning Misclassifications
+
+predictorRPart1216 = ggplot() + geom_polygon(data = finalMerge_maps, aes(x = long, y = lat, group = group, fill = did_the_predictor_work), color = "Gray", size = 0.5) + scale_fill_manual(values = c("coral1", "Gray"), labels = c("Misclassfied", "Correctly Predicted"), guide = guide_legend(title = "Did the rPart Predictor Work?")) + stateBorders + no_background + labs(title = "Misclassified Counties by Recursive Partitioning")
+predictorRPart1216
+```
+
+# Predicting the change from 2012 to 2016
+Author: Kimberly Tze
+
+For the predicting the change from 2012 to 2016, we used 2-fold cross validation and k-nearest neighbors. In order to classify the data, we created a factor variable that denotes whether the county changed from Republican to Democrat, changed from Democrat to Republican, stayed Republican, or stayed Democrat. To create the training set and the test set, for each state, ⅔ of the counties were randomly chosen to be in the training set and the remaining ⅓ was chosen to be in the test set. The training set was then split in half and used in 2-fold cross validation to choose a value for k. In order to choose a good value for k, 2-fold cross validation was run using the 2 training sets and values of k ranging from 1 to 25, and then the accuracies of those predictions were plotted to see which value of k gave the most accurate predictions on average. Finally, after choosing a value of k, the predictor was evaluated with the test set. This whole algorithm was run several times to adjust the predictor variables and k as needed, until we found a combination that was pretty accurate.
+
+
+The final predictor variables used were the county’s longitude, latitude, proportion of white population, proportion of native born residents, proportion of people with an education level of high school graduate or less, proportion of lower income households ($0 - $34,999), and proportion of middle income households ($35,000 - $149,999). The last three of these predictor variables are aggregates of some of the other census variables. Because knn requires that no predictor variables be NA, the few counties with no census data were not included in the training or test sets.
+
+
+With the final value of k (5) and the final set of predictor variables (above), the accuracy of predicting every county using the ⅔ size training set was about 86% on average.
+
+
+Where this predictor does not work well is consistency. Because knn makes its predictions based on the training set and the data of our training set are chosen randomly, then the final accuracy will vary depending on which data made it into the training set. Even with a static training set and a static data set that we want to predict, the accuracy of knn can still vary slightly. We found that the predictor variables chosen were the best at predicting counties that stayed Republican (out of the four possible classifications). The K-NN predictor also seemed to work not as well on predicting the classification for swing states.
+
+
+## Loading the data frame
+
+```{r, echo = FALSE}
+finalMergeCopy = finalMerge
+```
+
+## Cleaning the data frame a little more
+
+Because in 2013, Bedford City, VA, merged back into Bedford County, there is no data for Bedford City from 2016. Thus, I decided to also merge Bedford City into Bedford County for 2012 (by adding the number of votes together), and then remove the row for Bedford City. Because some of the predictor variables we wanted to used were from the census data, we also had to subset out any counties that did not have any census data.
+
+```{r, echo = FALSE}
+# Get the row numbers
+city = which(finalMergeCopy$id == "virginiabedfordcity")
+county = which(finalMergeCopy$id == "virginiabedford")
+
+# Merge the Bedford City into the county
+finalMergeCopy$romneyVotes2012[county] = finalMergeCopy$romneyVotes2012[county] + finalMergeCopy$romneyVotes2012[city]
+finalMergeCopy$obamaVotes2012[county] = finalMergeCopy$obamaVotes2012[county] + finalMergeCopy$obamaVotes2012[city]
+
+# Subset out the row for Bedford City
+finalMergeCopy = finalMergeCopy[-city, ]
+
+# Clean up variables
+rm(city, county)
+
+```
+
+## Choosing predictor variables
+
+After choosing our predictor variables, I subsetted out any rows that have NAs in those variables, or else you can't run ```knn``` on it. Because most of the variables in the census data are absolute numbers, I also converted these to proportions, so the counties can more easily be compared (since some might have higher populations than others). For some of the census data, such as education, there are several different levels (ex. education less than 9th grade, high school education with no diploma, etc.), so I aggregated them into one level (ex. high school graduate or less) and took the proportion of that.
+
+```{r, echo = FALSE}
+# A vector of our predictor variables
+predictor_vars = c("county_longitude", "county_latitude", "White.Population", "PLACE.OF.BIRTH...Native", "Education...High.school.or.less", "Income.Lower.class", "Income.Middle.class")
+
+# Subset out any NAs that appear
+finalMergeCopy = finalMergeCopy[!is.na(finalMergeCopy$Total.Population), ]
+finalMergeCopy = finalMergeCopy[!is.na(finalMergeCopy$White.Population), ]
+
+# Convert variables to proportions or other formats, if needed
+finalMergeCopy$White.Population = finalMergeCopy$White.Population / finalMergeCopy$Total.Population
+
+finalMergeCopy$PLACE.OF.BIRTH...Native = finalMergeCopy$PLACE.OF.BIRTH...Native / finalMergeCopy$PLACE.OF.BIRTH...Total.population
+
+finalMergeCopy$Education...High.school.or.less = (finalMergeCopy$Education...Less.than.9th.grade + finalMergeCopy$Education...9th.to.12th.grade..no.diploma + finalMergeCopy$Education...High.school.graduate) / finalMergeCopy$Education...Population.25.years.and.over
+
+finalMergeCopy$Income.Lower.class = (finalMergeCopy$Less.than..10.000 + finalMergeCopy$X.10.000.to..14.999 + finalMergeCopy$X.15.000.to..24.999 + finalMergeCopy$X.25.000.to..34.999) / finalMergeCopy$Total.households
+
+finalMergeCopy$Income.Middle.class = (finalMergeCopy$X.35.000.to..49.999 + finalMergeCopy$X.50.000.to..74.999 + finalMergeCopy$X.75.000.to..99.999 + finalMergeCopy$X.100.000.to..149.999) / finalMergeCopy$Total.households
+```
+
+## Creating the factor variable 
+
+For the change from 2012 to 2016, I created a factor variable that denotes whether the county changed from "Republican to Democrat", changed from "Democrat to Republican", "Stayed Republican", or "Stayed Democrat".
+
+```{r, echo = FALSE}
+finalMergeCopy$change = rep("temp", length(finalMergeCopy[,1]))
+
+# Find out the change for each county
+finalMergeCopy$change[finalMergeCopy$romneyVotes2012 > finalMergeCopy$obamaVotes2012 & finalMergeCopy$votes_dem2016 > finalMergeCopy$votes_gop2016] = "rep to dem"
+finalMergeCopy$change[finalMergeCopy$obamaVotes2012 > finalMergeCopy$romneyVotes2012 & finalMergeCopy$votes_gop2016 > finalMergeCopy$votes_dem2016] = "dem to rep"
+finalMergeCopy$change[finalMergeCopy$romneyVotes2012 > finalMergeCopy$obamaVotes2012 & finalMergeCopy$votes_gop2016 > finalMergeCopy$votes_dem2016] = "stayed rep"
+finalMergeCopy$change[finalMergeCopy$obamaVotes2012 > finalMergeCopy$romneyVotes2012 & finalMergeCopy$votes_dem2016 > finalMergeCopy$votes_gop2016] = "stayed dem"
+
+# Convert the class to factor
+finalMergeCopy$change = factor(finalMergeCopy$change)
+```
+
+## Creating the training and test sets
+
+To perform K-NN, I first separated the data into training and test sets, where for each state, I randomly chose 2/3 to be in the training set and 1/3 to be in the test set. We decided to use 2-fold cross validation in order to find a good value for ```k```, so I also split the training set into two equal halves.
+
+```{r, echo = FALSE}
+# For now, these variables will hold the indices of the rows that will be a part of that set
+training1 = integer(0)
+training2 = integer(0)
+test = integer(0)
+
+# For each state, equally divide the counties into the three training and test sets
+states = unique(finalMergeCopy$state)
+for (state in states) {
+  one_state = sample(which(finalMergeCopy$state == state))
+  len = length(one_state)
+  if (len %% 3 == 0) {
+    i = len/3
+  } else if (len %% 3 == 1) {
+    i = floor(len/3)
+  } else {
+    i = ceiling(len/3)
+  }
+  training1 = c(training1, one_state[seq(1, i)])
+  training2 = c(training2, one_state[seq(i + 1, i * 2)])
+  test = c(test, one_state[seq(i*2 + 1, len)])
+}
+
+# Take subsets of finalMergeCopy to actually get our training and test sets
+training1 = finalMergeCopy[training1, ]
+training2 = finalMergeCopy[training2, ]
+test = finalMergeCopy[test, ]
+
+# Clean up variables
+rm(states, state, one_state, len, i)
+```
+
+## Picking a k-value using 2-fold cross validation
+
+In order to pick a good value for ```k```, for ```i``` from 1 to 20, I ran the ```knn()``` function with ```training1``` as the training set and ```training2``` as the test set and vice versa, with ```k=i```. I found the accuracy of each of the classifications returned from ```knn``` and plotted them on a graph, along with their average, to see which value of ```k``` was the most accurate.
+
+```{r, echo = FALSE}
+knn_results = data.frame(k = integer(0), accuracy = numeric(0), training_set = character(0))
+
+# Run knn on all values of k from 1 to 20
+for (i in seq(1, 25)) {
+  # Run knn using the training1 and training2 data frames as both the training and test sets
+  knn.t1 = knn(training1[, predictor_vars], training2[, predictor_vars], training1$change, k = i)
+  knn.t2 = knn(training2[, predictor_vars], training1[, predictor_vars], training2$change, k = i)
+  
+  # Find the accuracy of the classifications
+  t1.acc = sum(knn.t1 == training2$change) / length(training2$change)
+  t2.acc = sum(knn.t2 == training1$change) / length(training1$change)
+  
+  # Add the accuracies, and their average to the knn_results data frame to be plotted later
+  knn_results = rbind(knn_results, data.frame(k = i, accuracy = t1.acc, training_set = "training1"))
+  knn_results = rbind(knn_results, data.frame(k = i, accuracy = t2.acc, training_set = "training2"))
+  knn_results = rbind(knn_results, data.frame(k = i, accuracy = (t1.acc + t2.acc) / 2, training_set = "average"))
+}
+knn_results$training_set = factor(knn_results$training_set)
+
+# Clean up variables
+rm(i, knn.t1, knn.t2, t1.acc, t2.acc)
+
+# Plot the accuracies for each value of k
+require(ggplot2)
+ggplot(data = knn_results) + geom_line(aes(x = k, y = accuracy, colour = training_set))
+```
+
+## Evaluating the accuracy of the predictor
+
+When the code chunk above was run several times, it appeared that 5 was a pretty good value for ```k``` because the accuracy seems to peak around there, so we used this value for the final evaluation.
+
+```{r, echo = FALSE}
+k = 5
+
+# Combine the training sets together for the final evaluation
+training = rbind(training1, training2)
+
+# Perform knn on the test set
+results = knn(training[, predictor_vars], test[, predictor_vars], training$change, k = k)
+sum(results == test$change) / length(test$change)
+```
+
+## Final prediction
+
+After running all of the code above several to adjust which predictor variables and value of ```k``` we used, I ran a final prediction on the all of the counties, using the same 2/3rd of the data as the training data.
+
+```{r, echo = FALSE}
+# Perform knn on the whole data set
+final_results = knn(training[, predictor_vars], finalMergeCopy[, predictor_vars], training$change, k = k)
+sum(final_results == finalMergeCopy$change) / length(finalMergeCopy$change)
+```
+
+```{r, echo = FALSE}
+# Add a logical column that says whether the prediction was correct or not
+finalMergeCopy$knn_results = final_results == finalMergeCopy$change
+finalKnnResults = finalMergeCopy[, c("fips", "knn_results")]
+
+# This is how we created our final merged data frame, but including this code will cause duplicates to be created, which is why we omit this.
+#finalMerge = merge(x = finalMerge, y = finalKnnResults, by = "fips", all = TRUE)
+```
+
+## Map K-NN Predictor Rate
+The following code chunks map out where the K-NN predictor produced incorrect classifications.
+
+```{r, echo = FALSE, fig.height = 7, fig.width = 12}
+
+#K-NN Misclassifications
+
+predictorKNN = ggplot() + geom_polygon(data = finalMerge_maps, aes(x = long, y = lat, group = group, fill = knn_results), color = "Gray", size = 0.5) + scale_fill_manual(values = c("olivedrab4", "Gray"), labels = c("Misclassfied", "Correctly Predicted"), guide = guide_legend(title = "Did the K-NN Predictor Work?")) + stateBorders + no_background + labs(title = "Misclassified Counties by K-NN")
+predictorKNN
+
+```
+
+## Both Predictors on Map
+
+The following code chunks map out where the both predictors produced incorrect classifications.
+
+```{r, echo = FALSE, fig.height = 7, fig.width = 12}
+
+#Misclassification in Both Predictor Functions
+
+finalMerge_maps$misclass = factor(paste(finalMerge_maps$did_the_predictor_work, finalMerge_maps$knn_results), levels = c("TRUE TRUE", "TRUE FALSE", "FALSE TRUE", "FALSE FALSE"), labels = c("Both Correct", "K-NN Misclass. Only", "rPart Misclass. Only", "Both Misclassified") )
+
+predictorComp = ggplot() + geom_polygon(data = finalMerge_maps, aes(x = long, y = lat, group = group, fill = misclass), color = "Gray", size = 0.5) + scale_fill_manual(values = c("White", "olivedrab4", "coral1", "Yellow"), guide = guide_legend(title = "Misclassification Type")) + geom_polygon(data = finalMerge_maps[!finalMerge_maps$did_the_predictor_work & !finalMerge_maps$knn_results, ], aes(x = long, y = lat, group = group), fill = NA, color = "Black", size = 0.5) + no_background + labs(title = "Comparing Misclassification Areas")
+predictorComp
+
+```
+
+```{r, fig.height = 10, fig.width = 15, echo = FALSE}
+rpartGraph = ggplot() + geom_bar(data = finalMerge[!is.na(winner2016), ], aes(x = Winner2016, y = (..count..)/sum(..count..), fill = did_the_predictor_work), position = "dodge") + scale_fill_manual(values = c("darkorange2", "darkturquoise"), labels = c("Incorrectly Predicted Loss", "Correctly Predicted Win"), guide = guide_legend(title = "Did the Predictor Work?")) + labs(title = "Recursive Partitioning Misclassification by Actual Party Wins", x = "Counties By Party's Win", y = "Percent of Counties Out of Total Counties") + ylim(0, 0.85)
+
+knnGraph = ggplot() + geom_bar(data = finalMerge[!is.na(winner2016), ], aes(x = Winner2016, y = (..count..)/sum(..count..), fill = knn_results), position = "dodge") + scale_fill_manual(values = c("darkorange2", "darkturquoise"), labels = c("Incorrectly Predicted Loss", "Correctly Predicted Win"), guide = guide_legend(title = "Did the Predictor Work?")) + labs(title = "K-NN Misclassification by Actual Party Wins", x = "Counties By Party's Win", y = "Percent of Counties Out of Total Counties") + ylim(0, 0.85)
+
+grid.arrange(rpartGraph, knnGraph, ncol = 2)
+
+```
+
+#Discussion
+
+The predictor functions both did well in more rural Midwestern areas as well as the Appalachians, where it is likely that the demographic information provided fits well with voting patterns. On the other hand, however, the functions both did poorly on the East and West Coasts and in the Rust Belt area. As seen from the bar charts above, both of our predictor functions did proportionally more poorly for counties that eventually were won by Democrats. Since our functions rely on the 2010 census, there may be demographic changes in the meantime that eroded the accuracy of our models. For instance, the Latino/Latina population was especially active this election season, which played prominent roles in places like Florida, Arizona, Texas, New Mexico, and even California. These changes would not have been apparent using the 2012 election data, for instance, since voters are exhibiting new behavior and breaking away from our static demographic data.
+
+On the other hand, there is still a sizable difference between our predictor function's results and the actual results when it comes to the Republican counties won, though less drastic. This is in line with the political postmortem following November 8th: the Republican candidate was able to flip many of the Democratic strongholds such as Michigan, defying previous voting patterns that our data relies on. Many of these changes were attributed to discontent among white Rust Belt working-class voters and are especially relevant for the accuracy of the K-NN function, which takes into account latitude/longitude, white population, native-born population, education levels, and income level information. Like the inaccuracies with respect to Democratic wins, these factors are then outside the scope of our data-and the predictive power, it seems, of much of the mainstream media.
+
+#References
+
+Packages:
+- ggplot2
+- RColorBrewer
+- knitr
+- maps
+- grid
+- gridExtra
+- rpart
+- rpart.plot
+- treeClust
+- class
+
+Inspirations
+- http://www.edweek.org/ew/dc/2013/gradrate_trend.html
+- https://www.washingtonpost.com/news/education/wp/2015/11/24/college-enrollment-rates-are-dropping-especially-among-low-income-students/
+- http://www.stat.wisc.edu/~gvludwig/327-5/maps#/12
+- http://eriqande.github.io/rep-res-web/lectures/making-maps-with-R.html
+- https://cran.r-project.org/web/packages/maps/maps.pdf
+- http://docs.ggplot2.org/0.9.3.1/scale_manual.html
+- http://www.stat.columbia.edu/~tzheng/files/Rcolor.pdf
+- http://www.statmethods.net/advgraphs/layout.html
+
+Reference for Texas County Populations in Maps section
+- https://en.wikipedia.org/wiki/Kenedy_County,_Texas
+- https://en.wikipedia.org/wiki/Loving_County,_Texas
+- https://en.wikipedia.org/wiki/King_County,_Texas
+
+Sources for Predicting the change from 2012-2016:
+- Lecture Slide 37 "Shiny" (for inspiration)
+- class package (for the knn function)
+
+Predictor for 2016:
+- Lab8
+- Hw5
