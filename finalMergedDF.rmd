@@ -1,0 +1,885 @@
+---
+title: "Election 2004-2016 Data"
+author: "Christine Puthoff, Kimberly Kao, Margaret Chen, Kimberly Tze, Eugene Heimann"
+output: html_document
+---
+
+## Libraries Used
+We used XML, rvest and RCurl packages to extract our data from the given data sources and from data scraping from the Web. We used the Maps, grid, and gridExtra packages to produce maps to check that our data contained the necessary counties.
+```{r}
+library(XML)
+library(RCurl)
+library(rvest)
+library(ggplot2)
+library(maps)
+library(grid)
+library(gridExtra)
+```
+## References
+2016 Election Data:
+http://www.stat.berkeley.edu/users/nolan/data/voteProject/2016_US_County_Level_Presidential_Results.csv
+
+2012 Election Data: 
+"http://www.politico.com/2012-election/results/president/alabama/"
+"http://www.politico.com/2012-election/results/president/arizona/"
+"http://www.politico.com/2012-election/results/president/arkansas/"
+"http://www.politico.com/2012-election/results/president/california/"
+"http://www.politico.com/2012-election/results/president/colorado/"
+"http://www.politico.com/2012-election/results/president/connecticut/"
+"http://www.politico.com/2012-election/results/president/delaware/"
+"http://www.politico.com/2012-election/results/president/district-of-columbia/"
+"http://www.politico.com/2012-election/results/president/florida/"
+"http://www.politico.com/2012-election/results/president/georgia/"
+"http://www.politico.com/2012-election/results/president/hawaii/"
+"http://www.politico.com/2012-election/results/president/idaho/"
+"http://www.politico.com/2012-election/results/president/illinois/"
+"http://www.politico.com/2012-election/results/president/indiana/"
+"http://www.politico.com/2012-election/results/president/iowa/"
+"http://www.politico.com/2012-election/results/president/kansas/"
+"http://www.politico.com/2012-election/results/president/kentucky/"
+"http://www.politico.com/2012-election/results/president/louisiana/"
+"http://www.politico.com/2012-election/results/president/maine/"
+"http://www.politico.com/2012-election/results/president/maryland/"
+"http://www.politico.com/2012-election/results/president/massachusetts/"
+"http://www.politico.com/2012-election/results/president/michigan/"
+"http://www.politico.com/2012-election/results/president/minnesota/"
+"http://www.politico.com/2012-election/results/president/mississippi/"
+"http://www.politico.com/2012-election/results/president/missouri/"
+"http://www.politico.com/2012-election/results/president/montana/"
+"http://www.politico.com/2012-election/results/president/nebraska/"
+"http://www.politico.com/2012-election/results/president/nevada/"
+"http://www.politico.com/2012-election/results/president/new-hampshire/"
+"http://www.politico.com/2012-election/results/president/new-jersey/"
+"http://www.politico.com/2012-election/results/president/new-mexico/"
+"http://www.politico.com/2012-election/results/president/new-york/"
+"http://www.politico.com/2012-election/results/president/north-carolina/"
+"http://www.politico.com/2012-election/results/president/north-dakota/"
+"http://www.politico.com/2012-election/results/president/ohio/"
+"http://www.politico.com/2012-election/results/president/oklahoma/"
+"http://www.politico.com/2012-election/results/president/oregon/"
+"http://www.politico.com/2012-election/results/president/pennsylvania/"
+"http://www.politico.com/2012-election/results/president/rhode-island/"
+"http://www.politico.com/2012-election/results/president/south-carolina/"
+"http://www.politico.com/2012-election/results/president/south-dakota/"
+"http://www.politico.com/2012-election/results/president/tennessee/"
+"http://www.politico.com/2012-election/results/president/texas/"
+"http://www.politico.com/2012-election/results/president/utah/"
+"http://www.politico.com/2012-election/results/president/vermont/"
+"http://www.politico.com/2012-election/results/president/virginia/"
+"http://www.politico.com/2012-election/results/president/washington/"
+"http://www.politico.com/2012-election/results/president/west-virginia/"
+"http://www.politico.com/2012-election/results/president/wisconsin/"
+"http://www.politico.com/2012-election/results/president/wyoming/"
+
+
+2008 Election Data:
+"http:www.stat.berkeley.edu/users/nolan/data/voteProject/countyVotes2008.xlsx"
+"http://superuser.com/questions/841398/how-to-convert-excel-file-with-multiple-sheets-to-a-set-of-csv-files"
+"https://www.r-bloggers.com/looping-through-files/"
+"https://en.wikipedia.org/wiki/United_States_presidential_election_in_the_District_of_Columbia,_2008"
+
+2004 Election Data:
+"http://www.stat.berkeley.edu/users/nolan/data/voteProject/countyVotes2004.txt"
+"https://en.wikipedia.org/wiki/United_States_presidential_election_in_Virginia,_2004"
+
+2010 Census Data:
+"http://www.stat.berkeley.edu/users/nolan/data/voteProject/census2010/B01003.csv"
+"http://www.stat.berkeley.edu/users/nolan/data/voteProject/census2010/DP02.csv"
+"http://www.stat.berkeley.edu/users/nolan/data/voteProject/census2010/DP03.csv"
+
+Location Data:
+"http://www.stat.berkeley.edu/~nolan/data/voteProject/counties.gml"
+
+Map Data:
+"http://www.stat.wisc.edu/~gvludwig/327-5/maps#/12""
+"http://eriqande.github.io/rep-res-web/lectures/making-maps-with-R.html
+"http://docs.ggplot2.org/0.9.3.1/scale_manual.html"
+"http://www.stat.columbia.edu/~tzheng/files/Rcolor.pdf"
+"https://cran.r-project.org/web/packages/maps/maps.pdf"
+"http://stackoverflow.com/questions/16566799/change-variable-name-in-for-loop-using-r"
+"http://www.statmethods.net/advgraphs/layout.html"
+
+## Extracting and Cleaning 2012 Election Data
+
+Author: Christine Puthoff
+
+The data provided for the 2012 election results were in the format of a xml file for each state. In order to extract the information needed, the XML package was used. The first step was to read in the list of all the state names which matched up with each of xml files for each state. Alaska and Hawaii were removed from the resulting data frame. A for loop over the state names was written to access each individual file. In the for loop the xpathSApply was used to access the variables that contained the county name, fips code, votes for Romney, votes for Obama, and percent of precincts reporting. Each variable was cleaned as a string and converted to numeric where necessary. A seperate variable called id is created as a cleaned version of the state and county names for ease of merging data later. A vector of the state name in the length of the amount of counties is created as well. These are put into a data frame for the state and rbind is used to combine the state's data frame to the data frame of the all the other state's data already read.
+
+```{r}
+# get the list of all state names for opening each state's file
+stateNames = read.table("http://www.stat.berkeley.edu/users/nolan/data/voteProject/countyVotes2012/stateNames.txt", 
+                    header = TRUE, stringsAsFactors = FALSE)
+
+# initialize an empty data frame 
+state = character()
+county2012 = character()
+id = character()
+fips = numeric()
+romneyVotes2012 = numeric()
+obamaVotes2012 = numeric()
+totalVotes2012 = numeric()
+percentReport2012 = numeric()
+e2012DF = data.frame(state, county2012, fips,
+                     romneyVotes2012, obamaVotes2012,
+                     totalVotes2012, percentReport2012)
+
+# get rid of Alaska in list since file does not exist
+# get rid of Hawaii for simplification of merging later
+stateFiles = stateNames$states[-c(2, 12)]
+
+# iterates through each state's file to add the state's data to
+# the final data frame
+for(sName in stateFiles) {
+  
+  # open the state's xml file and establish root
+  e2012Doc = xmlParse(paste("http://www.stat.berkeley.edu/users/nolan/data/voteProject/countyVotes2012/",
+                      sName, ".xml", sep = ''))
+  e2012Root = xmlRoot(e2012Doc)
+  
+  # extract name of each county and clean it so no whitespace
+  # and create space between counties that are 2 words
+  county2012 = xpathSApply(e2012Root,
+                       '/table/tbody/tr/th[@class = "results-county"]',
+                       xmlValue, recursive = FALSE)
+  county2012 = gsub(' ', '', county2012)
+  
+  # create vector of the state name to put in data frame and
+  # change - to blank space to make uniform with data from
+  # other elections
+  state = rep(gsub('-', ' ', sName), length(county2012))
+  
+  # create id of county and state to help with merging
+  id = paste(gsub(' ', '', state),
+             tolower(gsub('[[:punct:]]|(County)', '', county2012)),
+             sep = '')
+  id = gsub('saint', 'st', id)
+  
+  # extract fips code for each county and clean by only keeping
+  # number and converting to numeric
+  fips = xpathSApply(e2012Root, '//tbody[@id]',
+                     xmlGetAttr, 'id')
+  fips = as.numeric(gsub('county', '', fips))
+  
+  # extract number of votes for Romney and clean by getting rid
+  # of , in order to convert to numeric
+  romneyVotes2012 = xpathSApply(e2012Root,
+                            '//abbr[@title = "Republican"]/../../td[@class = "results-popular"]',
+                            xmlValue, trim = TRUE)
+  romneyVotes2012 = as.numeric(gsub(',', '', romneyVotes2012))
+  
+  # extract number of votes for Obama and clean by getting rid
+  # of , in order to convert to numeric
+  obamaVotes2012 = xpathSApply(e2012Root,
+                           '//abbr[@title = "Democratic"]/../../td[@class = "results-popular"]',
+                           xmlValue, trim = TRUE)
+  obamaVotes2012 = as.numeric(gsub(',', '', obamaVotes2012))
+  
+  # total number of votes
+  totalVotes2012 = xpathSApply(e2012Root, '//tbody/tr/td[@class = "results-popular"]', xmlValue, trim = TRUE)
+  totalVotes2012 = as.numeric(gsub(',', '', totalVotes2012))
+  fac = rep(1:length(county2012), each = length(totalVotes2012)/length(county2012))
+  totalVotes2012 = split(totalVotes2012, fac)
+  totalVotes2012 = sapply(totalVotes2012, sum)
+  
+  # precinct reporting percentage
+  percentReport2012 = xpathSApply(e2012Root,
+                                  '//span[@class = "precincts-reporting"]',
+                                  xmlValue)
+  percentReport2012 = gsub('% Reporting', '', percentReport2012)
+  percentReport2012 = as.numeric(percentReport2012)/100
+  
+  # create data frame for this state
+  stateDF = data.frame(state, county2012, id, fips,
+                       romneyVotes2012, obamaVotes2012,
+                       totalVotes2012, percentReport2012,
+                       stringsAsFactors = FALSE)
+  
+  # combine this state's data to the larger data frame
+  e2012DF = rbind(e2012DF, stateDF)
+}
+```
+
+```{r}
+hrefs = read.table(file = "http://www.stat.berkeley.edu/~nolan/data/voteProject/countyVotes2012/hrefs.txt", stringsAsFactors = FALSE)
+```
+
+## Extracting and Cleaning 2016 Presidential Election Data
+
+Author: Margaret Chen
+
+
+This source is in the form of an XML document, and so basic XML commands were used to extract the XML data. The first extractions for county names, longitude, and latitude came with blanks and so were eliminated through regular expressions. The longitude and latitude data are further scaled down to reflect actual longitude and latitude figures. Since state names are parent nodes of each county, I matched each county to a state by creating a vector with the number of counties of each state and the state names, then replicating each state name by the number of counties in each state. The same is done for the state abbreviations. Afterwards, I merge the county name, state name, state abbreviation, latitude, and longitude vectors into a single data frame. Finally, I create the IDs for further merging of this data frame with my teammates' data frames.
+
+```{r county location data}
+#extract data
+library(XML)
+countyLocation = xmlParse("http://www.stat.berkeley.edu/~nolan/data/voteProject/counties.gml")
+countyLocationRoot = xmlRoot(countyLocation)
+
+#pull out specific data and, in the case of longitude and latitude, divided by 1000000 because data is stored 1000000x too large
+countyName = xpathSApply(countyLocationRoot, '//county/gml:name', xmlValue )
+countyName = gsub('\\\n    ', '', countyName)
+longitude = xpathSApply(countyLocationRoot, '//county/gml:location/gml:coord/gml:X', xmlValue )
+longitude = as.numeric(gsub('\\\n {6,6}', '', longitude))/1000000
+latitude = xpathSApply(countyLocationRoot, '//county/gml:location/gml:coord/gml:Y', xmlValue )
+latitude = as.numeric(gsub('\\\n {6,6}', '', latitude))/1000000
+
+#match state to counties
+numCountiesEachState = xpathSApply(countyLocationRoot, '//state', xmlSize ) - 1
+states = xpathSApply(countyLocationRoot, '//state/gml:name', xmlValue)
+states = gsub('\\\n {3,3}', '', states)
+stateName = rep(states, numCountiesEachState)
+
+#match state abbreviations to counties
+abbrev = xpathSApply(countyLocationRoot, '//state/gml:name', xmlGetAttr, 'abbreviation')
+stateAbbrev = rep(abbrev, numCountiesEachState)
+
+#combine into one data frame
+countyLocationDF = data.frame(county_nameLongLat = countyName, state_name = stateName, state_abbr = stateAbbrev, county_latitude = latitude, county_longitude = longitude, stringsAsFactors = FALSE)
+
+#creating ID for merge
+countyLocationDF$id = paste( countyLocationDF$state_name, countyLocationDF$county_nameLongLat )
+countyLocationDF$id = gsub(' saint ', ' st ', ignore.case = TRUE, countyLocationDF$id)
+countyLocationDF$id = gsub(' (county)| (borough)| (municipality)| (census area)| (parish)', '', ignore.case = TRUE, countyLocationDF$id)
+countyLocationDF$id = gsub('[[:blank:]|[:punct:]]', '', countyLocationDF$id)
+countyLocationDF$id = tolower(countyLocationDF$id)
+
+#subsetting relevant information
+countyLocationDF = countyLocationDF[countyLocationDF$state_name != "ALASKA" & countyLocationDF$state_name != "HAWAII", ]
+
+#there isn't an entry for Broomfield, Colorado. I scrape the information off the web
+URL = "https://en.wikipedia.org/wiki/Broomfield,_Colorado"
+pageContents = getURLContent(URL)
+pTables = readHTMLTable(pageContents)
+sapply(pTables, dim)
+broomfieldCoord = readHTMLTable(pageContents, which = 2,
+                     stringsAsFactors = FALSE)
+broomfieldCoord[6, 1]
+
+#we're manually determining the position of the information. If the information is inaccurate, I've written a warning
+broomfieldLong = as.numeric(substring(broomfieldCoord[6, 1], first = 80, last = 90)) #should be -105.052038
+broomfieldLat = as.numeric(substring(broomfieldCoord[6, 1], first = 69, last = 77)) #should be 39.953302
+if (broomfieldLat != 39.953302 | broomfieldLong != -105.052038){
+  broomfieldLat = 39.953302
+  broomfieldLong = -105.052038
+  warning("Broomfield County latitude and longitude not in line with expectations. Changed to 39.953302 and -105.052038")
+}
+
+#now manually add entries to data frame
+countyLocationDF = rbind(countyLocationDF, c("Broomfield", "COLORADO", "CO", broomfieldLat, broomfieldLong, "coloradobroomfield"))
+
+#add latituate and longitude
+countyLocationDF$county_latitude = as.numeric(countyLocationDF$county_latitude)
+countyLocationDF$county_longitude = as.numeric(countyLocationDF$county_longitude)
+```
+
+## Project II - 2016 Presidential Election Data
+
+author: Margaret Chen
+
+This data frame is relatively straightforward to clean. I read the provided CSV file into R. The file itself has county name information from Alaska and Hawaii missing, but because we are not analyzing information from Alaska and Hawaii, there is no web-scraping on that front However, this data frame is missing the full state name, so I used the merged part of the latitude/longitude data frame (which already has both the abbreviation and the state name) with the election 2016 data frame to add that information. IDs are created to merge with other teammates' data frames, and relevant columns (state abbreviation, county name, votes statistics, FIPS, state name, and ID) are subsetted, and Alaska and Hawaii information are subsetted out.
+
+```{r 2016 election data}
+
+election2016 = read.csv("http://www.stat.berkeley.edu/users/nolan/data/voteProject/2016_US_County_Level_Presidential_Results.csv", stringsAsFactors = FALSE)
+
+#matching state names with partial data frame from county location dataframe
+election2016 = merge( x = election2016, y = unique(countyLocationDF[c("state_abbr", "state_name")]), by = "state_abbr", all.x = TRUE )
+
+#creating ID
+election2016$id = paste( election2016$state_name, election2016$county_name )
+election2016$id = gsub(' saint ', ' st ', ignore.case = TRUE, election2016$id)
+election2016$id = gsub('oglala county', 'shannon', ignore.case = TRUE, election2016$id)
+election2016$id = gsub(' (county)| (borough)| (municipality)| (census area)| (parish)', '', ignore.case = TRUE, election2016$id)
+election2016$id = gsub('[[:blank:]|[:punct:]]', '', election2016$id)
+election2016$id = tolower(election2016$id)
+
+#subsetting relevant information
+election2016 = election2016[ , c("state_abbr", "county_name", "votes_dem", "votes_gop", "total_votes", "combined_fips", "state_name", "id")]
+election2016 = election2016[election2016$state_abbr != "AK" & election2016$state_abbr != "HI", ]
+
+#rename columns to clarify source of information (election 2016) for when other teammates' data frames are merged
+colnames(election2016)[2:5] = c("county_name2016", "votes_dem2016", "votes_gop2016", "total_votes2016")
+
+```
+
+## Merging 2016 Election with County Locations
+
+Author: Christine Puthoff
+
+The first 2 data frames merged together were the 2016 election data and the county location data by their id column. An inner merge and outer merge is both done to compare the results. The difference between the 2 merges is put into another data frame to examine. Here we see that Broomfield, Colorado is not in the county location data but is in 2016 election data so it is kept. Bedford City, Clifton Forge City, and South Boston City in Virginia are not present in the 2016 election data. A quick search over the 2012 election data shows that Bedford City is present there so it is kept in the merge and the fips code from the 2012 data is added for ease of the next merge. The other 2 cities however do not seem to exist in any of the years of election data so these 2 cities are dropped from the data frame. There were 2 id columns created in the merge so these are consolidated into one column.
+
+```{r}
+testDF_inner_merge = merge( x = countyLocationDF, y = election2016, by = c("id", "state_abbr") )
+testDF_outer_merge = merge( x = countyLocationDF, y = election2016, by = c("id", "state_abbr"), all = TRUE )
+
+testDF_outer_merge$county_name.x[testDF_outer_merge$id %in% testDF_inner_merge$id == FALSE] #which counties are only in the outer merge data frame
+
+entriesToExamine = testDF_outer_merge[testDF_outer_merge$id %in% testDF_inner_merge$id == FALSE, ]
+# Broomfield, Colorado is not in location data
+# Bedford City, Virginia not in 2016 election data
+# Clifton Forge City and South Boston City in Virginia are not
+# in any election data so we will drop those 2 rows
+
+merge1 = testDF_outer_merge[testDF_outer_merge$id != 
+                              'virginiasouthbostoncity' &
+                              testDF_outer_merge$id !=
+                              'virginiacliftonforgecity', ]
+stateNotMatch = which(is.na(merge1$state_name.x))
+merge1$state_name.x[stateNotMatch] = merge1$state_name.y[stateNotMatch]
+merge1 = merge1[ , -12]
+colnames(merge1)[4] = "state_name"
+# consolidating to having one column with state name
+merge1$combined_fips[merge1$id == 'virginiabedfordcity'] = 51515
+# added fips to Bedford City, Virginia to make merging with
+# 2012 easier
+```
+
+## Merging 2012 Election Data
+
+Author: Christine Puthoff
+
+The next merge is taking the previously merged data frame with 2012 election data merging by fips code. An outer merge is done and any NA's present in the data frame are checked. The only NA's that seem to appear are from the previous 2 discrepancies from Broomfield, Colorado and Bedford City, Virginia from the previous merge. So all rows are kept. An inner merge is done to analyze the differences in the id columns. The differences noted are then standardized in the id column and also changed in 2004 and 2008 data as well to make merging simpler for the next merges. Saint is standardized to st and jeffersondavis is standarized to jeffdavis. There are 3 counties in New York that have different specified county names for the same county so these are standardized by changing the ids of newyorkkings to newyorkbrooklyn, newyorknewyork to newyorkmanhatten, and newyorkrichmond to newyorkstatenisland. After these changes in the id column, the id is consolidated into 1 column
+
+```{r}
+merge12_16outer = merge(e2012DF, merge1, by.x = "fips", by.y = "combined_fips", all.x = TRUE, all.y = TRUE)
+missing = sort(unique(which(is.na(merge12_16outer), arr.ind = TRUE)[,1]))
+# 2016 doesn't contain Bedford City, Virginia
+
+merge12_16inner = merge(e2012DF, merge1, by.x = "fips", by.y = "combined_fips")
+idNotMatch = which(merge12_16inner$id.x != merge12_16inner$id.y)
+idNM = merge12_16inner[idNotMatch, c('id.x', 'id.y')]
+# need to standardize saint to st in 2012 and 2008
+# looking at 2004 and 2008 data standardizing id for merging
+# purposes by jeffersondavis is changed to jeffdavis and for
+# 2004 data kingsnewyork to brooklynnewyork, newyorknewyork to
+# manhattannewyork, and richmondnewyork to statenislandnewyork
+
+merge2 = merge12_16outer[ , -9]
+colnames(merge2)[4] = 'id'
+# cleaning up so only one id column
+```
+## Extracting and Cleaning 2010 Census Data
+
+Author: Eugene Heimann
+
+Data is already in csv format, so I created a dataframe for each csv file.  Since B01003 is in an altered format I had to recreate it in the normal format. Then create a large data frame with all the variables we wanted from each of the csv files.
+
+
+```{r}
+#Read the data into R from csv form
+B01003 = read.csv("http://www.stat.berkeley.edu/users/nolan/data/voteProject/census2010/B01003.csv", stringsAsFactors=FALSE)
+
+DP02 = read.csv("http://www.stat.berkeley.edu/users/nolan/data/voteProject/census2010/DP02.csv", stringsAsFactors=FALSE)
+
+DP03 = read.csv("http://www.stat.berkeley.edu/users/nolan/data/voteProject/census2010/DP03.csv", stringsAsFactors=FALSE)
+
+```
+
+```{r}
+#Reorginizing B01003
+#Creating three separate Dfs for each variable
+B01003_1 = B01003[B01003$POPGROUP.id == 1, c(2, 3, 6)]
+B01003_2 = B01003[B01003$POPGROUP.id == 2, c(2, 6)]
+B01003_4 = B01003[B01003$POPGROUP.id == 4, c(2, 6)]
+#Merging Total Pop. and White Pop. Dfs
+#Counties without white population data will be left as NA
+B01003_1_2 = merge(B01003_1, B01003_2, by.x = "GEO.id2", by.y = "GEO.id2", all = TRUE)
+#Adding the Black/African American Df
+#Counties without white population data will be left as NA
+B01003_1_2_4 = merge(B01003_1_2, B01003_4, by.x = "GEO.id2", by.y = "GEO.id2", all = TRUE)
+#Naming Columns
+B01003_1_2_4 = data.frame("GEO.id2" = B01003_1_2_4$GEO.id2, "County, State" = B01003_1_2_4$GEO.display.label, "Total Population" = B01003_1_2_4$HD01_VD01.x, "White Population" = B01003_1_2_4$HD01_VD01.y, "Black Population" = B01003_1_2_4$HD01_VD01)
+```
+
+```{r}
+#Selecting our choice variables from DP02
+#With Variable Names
+
+DP02_1 = data.frame("GEO.id2" = DP02$GEO.id2, "Education - Population 25 years and over" = DP02$HC01_VC84, "Education - Less than 9th grade" = DP02$HC01_VC85, "Education - 9th to 12th grade, no diploma" = DP02$HC01_VC86, "Education - High school graduate" = DP02$HC01_VC87, "Education - Some college, no degree" = DP02$HC01_VC88, "Education - Associate's degree" = DP02$HC01_VC89, "Education - Bachelor's degree" = DP02$HC01_VC90, "Education - Graduate or professional degree" = DP02$HC01_VC91, "PLACE OF BIRTH - Total population" = DP02$HC01_VC128, "PLACE OF BIRTH - Native" = DP02$HC01_VC129, "PLACE OF BIRTH - Native - Born in United States" = DP02$HC01_VC130, "PLACE OF BIRTH - Native - Born in United States - State of residence" = DP02$HC01_VC131, "PLACE OF BIRTH - Native - Born in United States - Different state" = DP02$HC01_VC132, "PLACE OF BIRTH - Native - Born in Puerto Rico, U.S. Island areas, or born abroad to American parent(s)" = DP02$HC01_VC133, "PLACE OF BIRTH - Foreign born" = DP02$HC01_VC134, "LANGUAGE SPOKEN AT HOME - English only" = DP02$HC01_VC167, "LANGUAGE SPOKEN AT HOME - Language other than English" = DP02$HC01_VC168, "LANGUAGE SPOKEN AT HOME - Language other than English - Speak English less than very well" = DP02$HC01_VC170, "LANGUAGE SPOKEN AT HOME - Language other than English - Spanish" = DP02$HC01_VC171, "LANGUAGE SPOKEN AT HOME - Language other than English - Spanish - Speak English less than very well" = DP02$HC01_VC172, "LANGUAGE SPOKEN AT HOME - Language other than English - Other Indo-European languages" = DP02$HC01_VC173, "LANGUAGE SPOKEN AT HOME - Language other than English - Other Indo-European languages - Speak English less than very well" = DP02$HC01_VC174, "LANGUAGE SPOKEN AT HOME - Language other than English - Asian and Pacific Islander languages" = DP02$HC01_VC175, "LANGUAGE SPOKEN AT HOME - Language other than English - Asian and Pacific Islander languages - Speak English less than very well" = DP02$HC01_VC176, "LANGUAGE SPOKEN AT HOME - Language other than English - Other languages" = DP02$HC01_VC177, "LANGUAGE SPOKEN AT HOME - Language other than English - Other languages - Speak English less than" = DP02$HC01_VC178)
+
+```
+```{r}
+#Selecting our choice variables from DP03
+#INCOME AND BENEFITS (IN 2010 INFLATION-ADJUSTED DOLLARS)
+DP03_1 = data.frame("GEO.id2" = DP03$GEO.id2, "Total households" = DP03$HC01_VC74, "Less than $10,000" = DP03$HC01_VC75, "$10,000 to $14,999" = DP03$HC01_VC76, "$15,000 to $24,999" = DP03$HC01_VC77, "$25,000 to $34,999" = DP03$HC01_VC78, "$35,000 to $49,999" = DP03$HC01_VC79, "$50,000 to $74,999" = DP03$HC01_VC80, "$75,000 to $99,999" = DP03$HC01_VC81, "$100,000 to $149,999" = DP03$HC01_VC82, "$150,000 to $199,999" = DP03$HC01_VC83, "$200,000 or more" = DP03$HC01_VC84)
+```
+
+```{r}
+#Combining dataframes
+#Missing County variables will be NA
+Df = merge(B01003_1_2_4, DP02_1, by.x = "GEO.id2", by.y = "GEO.id2", all = TRUE)
+Df = merge(Df, DP03_1, by.x = "GEO.id2", by.y = "GEO.id2", all = TRUE)
+```
+
+```{r}
+#Get rid of Puerto Rico
+Df = Df[-grep("Puerto Rico", Df$County..State, perl = TRUE), ]
+#Get rid of Alaska
+Df = Df[-grep("Alaska", Df$County..State, perl = TRUE), ]
+#Get rid of Hawaii
+Df = Df[-grep("Hawaii", Df$County..State, perl = TRUE), ]
+```
+
+## Merging Census Data
+
+Author: Christine Puthoff
+
+The next merge is done with the census data by fips code. An outer merge is performed. The resulting NA's are located and put into a data frame for examining. Here we see that the census data does not include any information on Kenedy, King, or Loving Counties in Texas. There are sporadic NA's in some columns of the census data. No rows are dropped since there is still election data present for those counties in Texas.
+
+```{r}
+Df$County..State = as.character(Df$County..State)
+mergeCensusOuter = merge(merge2, Df, by.x = "fips", by.y = "GEO.id2", all.x = TRUE, all.y = TRUE)
+missing2 = sort(unique(which(is.na(mergeCensusOuter[ , 1:19]), arr.ind = TRUE)[,1]))
+missingDF = mergeCensusOuter[missing2, ]
+# Census data doesn't include any data for Kennedy, King, or
+# Loving Counties in Texas
+```
+## Extracting and Cleaning 2008 Election Data
+
+Author: Kimberly Kao
+
+The original data was in a Excel workbook. I had to use an Excel macro to convert each tab containing each state data to separate CSV files, then merge all the files into a single CSV file containing all county information, including a column for State and column containing a unique identifier of stateName,countyName. Washington DC was missing, so I scraped the data from Wikipedia and merged it with my final dataframe. 
+
+I used a Macro provided in "http://superuser.com/questions/841398/how-to-convert-excel-file-with-multiple-sheets-to-a-set-of-csv-files"" to export all the worksheets into 50 CSV files, each file containing data for a specific state. 
+
+# Merging all 50 CSV files. Modelled on: https://www.r-bloggers.com/looping-through-files/
+```
+path = "C:/Users/Kimberly/Documents/HW 2016-2017/STATS133/proj2/states/"
+out.file <- ""
+# Need to write column specifying state while merging into one data frame
+file.names <- dir(path, pattern =".csv")
+# Iterate through each CSV file and create a dataframe for each, also adding 
+# a 'State' column. Then combine all the dataframes into an aggregate dataframe
+# with all states.
+for(i in 1:length(file.names)){
+  file <- read.csv(file.names[i],header=TRUE, sep=",", stringsAsFactors=FALSE)
+  state = data.frame(State = rep(substring(file.names[i], 17, nchar(file.names[i]) - 4), nrow(file)))
+  file <- cbind(file, state)
+  out.file <- rbind(out.file, file)
+}
+ out.file <- out.file[, -7] # deletes a NA column
+ write.csv(out.file, file = "allStates2008Election.csv", 
+             row.names = FALSE)
+```
+
+# Creating data frame from aggregate CSV file. Omits rows with NAs because they are not rows containing county info.
+```{r}
+election2008 = read.csv("file:///Users/eugene/Desktop/Class/STAT133/allStates2008Election.csv", stringsAsFactors=FALSE)
+election2008 = na.omit(election2008)
+```
+# Scrape the web for data on Washington DC using the XML/RCurl packages.
+```{r washingtonDC}
+URL = "https://en.wikipedia.org/wiki/United_States_presidential_election_in_the_District_of_Columbia,_2008"
+pageContents = getURLContent(URL)
+pTables = readHTMLTable(pageContents)
+sapply(pTables, dim)
+voteDC = readHTMLTable(pageContents, which = 8,
+                     stringsAsFactors = FALSE)
+# Reformatting chars to omit commas to convert to numbers
+votes = sapply(voteDC$V5, function(i) gsub(pattern=",", replacement = "", x = i))
+thirdParty = sum(as.numeric(votes[c(4,5,6)]))
+
+# Create dataframe of one row with the same columns as final 2008 dataframe
+finalDC = data.frame(County = "District of Columbia", Total.Precincts = NA, Precincts.Reporting = NA, Obama = as.numeric(votes[2]), McCain = as.numeric(votes[3]), Other = thirdParty, State = "District of Columbia", stringsAsFactors = FALSE)
+```
+
+```{r 2008DF}
+# Transform char vectors into int vectors where needed.
+election2008[, 2:6] = apply(election2008[, 2:6], 2, function(i) as.numeric(gsub(pattern=",", replacement = "", x = i)))
+
+# Add Washington DC
+election2008 = rbind(election2008, finalDC)
+# Create unique ID for each county (id=countynameStatename) for easier merging of dataframes
+election2008$County = gsub(pattern = "Saint", "St", x=election2008$County)
+election2008$simpCounty = tolower(gsub(pattern = "[[:punct:]]|\\s|(County)", "", x=election2008$County))
+election2008$State = tolower(gsub(pattern = "[[:punct:]]|\\s", "", x=election2008$State))
+election2008$id = paste(tolower(election2008$State), election2008$simpCounty, sep = "")
+
+#Append 2008 to the county and votes
+names(election2008)[2:6] = c("TotalPrecincts2008", "PrecinctsReporting2008", "Obama2008", "McCain2008", "Other2008")
+# Omit Alaska and Hawaii
+election2008 = election2008[election2008$State != "alaska",]
+election2008 = election2008[election2008$State != "hawaii",]
+```
+
+## Merging 2008 Election Data
+
+Author: Christine Puthoff
+
+The next merge is done by id to merge the 2008 election data. An outer merge is performed. The NA's again are located and made into a data frame for examining. There is a discrepany in id for Lewis and Clark, Montana so the id in the merged frame is changed to match the id in the 2008 frame to a standard id of montanalewisclark by dropping the and. There are no other new NA's so all rows are kept.
+
+```{r}
+mergeCensusOuter$id[which(mergeCensusOuter$id == "montanalewisandclark")] = "montanalewisclark"
+merge08_census = merge(election2008, mergeCensusOuter,by = 'id', all = TRUE)
+test = sort(unique(which(is.na(merge08_census[ , 1:27]), arr.ind = TRUE)[,1]))
+testDF = merge08_census[test, ]
+# changing montanalewisandclark to montanalewisclark id for
+# merging purposes
+```
+## Extracting and Cleaning 2004 Election Data
+
+author: Kimberly Tze
+
+The 2004 election data was provided as a .txt file with whitespace delimiters, which we extracted data from using ```read.delim()```. Because the ```countyName``` column contained both the state and county name, they were separated and put into two new columns in the data frame.
+
+Data source: http://www.stat.berkeley.edu/users/nolan/data/voteProject/countyVotes2004.txt
+
+```{r}
+election2004 = read.delim("http://www.stat.berkeley.edu/users/nolan/data/voteProject/countyVotes2004.txt", sep = "")
+
+# Split the given countyName column into two separate columns by state and county
+splitCountyName = strsplit(as.character(election2004$countyName), ",")
+election2004$state2004 = sapply(splitCountyName, function(x) x[1])
+election2004$county2004 = sapply(splitCountyName, function(x) x[2])
+
+# Subset to get the relevant columns, and rename them
+election2004 = election2004[c("state2004", "county2004", "bushVote", "kerryVote")]
+```
+
+
+# Extracting Virginia's 2004 Election Data
+
+author: Kimberly Tze
+
+The 2004 election data was provided as a .txt file with whitespace delimiters, which we extracted data from using ```read.delim()```. Because the ```countyName``` column contained both the state and county name, they were separated and put into two new columns in the data frame.
+
+Data source: http://www.stat.berkeley.edu/users/nolan/data/voteProject/countyVotes2004.txt
+
+```{r 2004 election data}
+election2004 = read.delim("http://www.stat.berkeley.edu/users/nolan/data/voteProject/countyVotes2004.txt", sep = "")
+
+# Split the given countyName column into two separate columns by state and county
+splitCountyName = strsplit(as.character(election2004$countyName), ",")
+election2004$state2004 = sapply(splitCountyName, function(x) x[1])
+election2004$county2004 = sapply(splitCountyName, function(x) x[2])
+
+# Subset to get the relevant columns, and rename them
+election2004 = election2004[c("state2004", "county2004", "bushVote", "kerryVote")]
+```
+
+
+# Extracting Virginia's 2004 Election Data
+
+The 2004 election data was provided as a .txt file with whitespace delimiters, which we extracted data from using ```read.delim()```. Because the ```countyName``` column contained both the state and county name, they were separated and put into two new columns in the data frame.
+
+Data source: http://www.stat.berkeley.edu/users/nolan/data/voteProject/countyVotes2004.txt
+
+```{r}
+election2004 = read.delim("http://www.stat.berkeley.edu/users/nolan/data/voteProject/countyVotes2004.txt", sep = "")
+
+# Split the given countyName column into two separate columns by state and county
+splitCountyName = strsplit(as.character(election2004$countyName), ",")
+election2004$state2004 = sapply(splitCountyName, function(x) x[1])
+election2004$county2004 = sapply(splitCountyName, function(x) x[2])
+
+# Subset to get the relevant columns, and rename them
+election2004 = election2004[c("state2004", "county2004", "bushVote", "kerryVote")]
+```
+
+
+# Extracting Virginia's 2004 Election Data
+
+The given text file did not include information for Virginia, so it had to be separately scraped from an html table on the Wikipedia page using the rvest library. The html table that we scraped from also contained rows for independent cities that sometimes have overlapping names with counties, so we added "city" to those independent counties with overlapping names to keep consistency with other data frame's information. We also rename the columns so we can merge it with the main data frame afterwards.
+
+Data source: https://en.wikipedia.org/wiki/United_States_presidential_election_in_Virginia,_2004
+Source on how to scrape from an html table: https://www.r-bloggers.com/using-rvest-to-scrape-an-html-table/
+
+```{r}
+
+library(rvest)
+url = "https://en.wikipedia.org/wiki/United_States_presidential_election_in_Virginia,_2004"
+
+# Scrape the data for each county in Virginia from Wikipedia
+virginia2004 = url %>%
+  read_html() %>%
+  html_nodes(xpath='//*[@id="mw-content-text"]/table[4]') %>%
+  html_table()
+
+# Get the rows that correspond to the county election results (not city)
+#virginia2004 = virginia2004[[1]][1:95, ]
+sameCityName = duplicated(gsub(", Virginia", "", virginia2004[[1]][[1]]))
+virginia2004[[1]][[1]][sameCityName] = gsub(", Virginia", " City", virginia2004[[1]][[1]])[sameCityName]
+virginia2004[[1]][[1]][!sameCityName] = gsub(", Virginia", "", virginia2004[[1]][[1]])[!sameCityName]
+
+# Get only the relevant columns from the table, and rename them to match the main data frame
+virginia2004 = data.frame(county2004 = virginia2004[[1]][[1]], kerryVote = virginia2004[[1]][[3]], bushVote = virginia2004[[1]][[5]])
+
+# Add a state2004 column to match the main data frame so we can merge them together
+virginia2004$state2004 = rep("virginia", length(virginia2004[[1]][[1]]))
+
+# Convert the number of votes to numeric
+virginia2004$kerryVote = as.numeric(gsub(",", "", virginia2004$kerryVote))
+virginia2004$bushVote = as.numeric(gsub(",", "", virginia2004$bushVote))
+
+```
+
+
+# Merge the Virginia data into the main data frame
+
+Finally, after extracting Virginia's election results from Wikipedia, we merge it back into the main data frame.
+
+```{r}
+# Merge the two data frames
+election2004 = rbind(election2004, virginia2004)
+```
+
+
+# Preparing to merge with the other years' election results
+
+For the purpose of merging all the years' election results together, we created an ```id``` column, which is just the state name appended to the county name -- all lowercase with no spaces or punctuation. 
+
+```{r}
+# Create a separate id column that we will use to merge all of the data frames
+election2004$id = paste(tolower(gsub(" ", "", election2004$state2004)), tolower(gsub(" ", "", election2004$county2004)), sep = "")
+```
+
+
+# Cleaning the data
+
+After some preliminary merges, we realized that some of the county names did not match up for various reasons, such as different formats or counties changing names over the years, so to fix that we modify the entries in the ```id``` column to match up with each other.
+
+```{r}
+# Change some ids that aren't consistent with the others
+election2004$id[election2004$id == "districtofcolumbiawashington"] = "districtofcolumbiadistrictofcolumbia"
+election2004$id[election2004$id == "newyorkkings"] = "newyorkbrooklyn"
+election2004$id[election2004$id == "newyorknewyork"] = "newyorkmanhattan"
+election2004$id[election2004$id == "newyorkrichmond"] = "newyorkstatenisland"
+election2004$id[election2004$id == "louisianajeffersondavis"] = "louisianajeffdavis"
+election2004$id[election2004$id == "mississippijeffersondavis"] = "mississippijeffdavis"
+```
+
+```{r}
+# Clean up unnecessary variables
+rm(virginia2004, splitCountyName, url)
+```
+## Merging 2004 Election Data
+
+Author: Christine Puthoff
+
+The last merge is done by id with the 2004 election data. An outer merge is performed. The NA's are located and put into a data frame for examining. Here we see that the 2004 data also needs to change the id for montanalewisandclark to montanalewisclark. Another discrepancy is with Miami-Dade County in Florida. The id for this county is changed from floridadade to floridamiamidade to match the already merged data frame. The data for 2004 is missing a fair amount of data from Virginia. This is most likely due to the fact that the 2004 Virginia data was scraped separately from Wikipedia so not all of the counties were in that data. Since these counties have data for the rest of the election years, they are kept in the data frame. The resulting final data frame contains 3109 counties.
+
+```{r}
+#load("election2004.rda")
+election2004$id[which(election2004$id == "montanalewisandclark")] = "montanalewisclark"
+election2004$id[which(election2004$id == "floridadade")] = "floridamiamidade"
+finalMerge = merge(election2004, merge08_census, by = 'id', all = TRUE)
+examine = sort(unique(which(is.na(finalMerge[ , 1:31]), arr.ind = TRUE)[,1]))
+examineDF = finalMerge[examine, ]
+# need to change montanalewisandclark to montanalewisclark and
+# floridadade to floridamiamidade in 2004 data
+# 2004 missing a lot of Virginia data due to source
+```
+## Final Merged Dataframe
+
+The variables in the final merged data frame are defined as:
+  - id: unique identifier for county
+  - state: state name (there are many columns from different merged DFs)
+  - county: county name (there are many columns from different merged DFs)
+  - bushVote2004: number of votes for Bush, Election 2004
+  - kerryVote2004: number of votes for Kerry, Election 2004
+  - TotalPrecincts2008: number of votes for Bush, Election 2008
+  - PrecicntsReporting2008: number of votes for Bush, Election 2008
+  - Obama2008: number of votes for Obama, Election 2008
+  - McCain2008: number of votes for McCain, Election 2008
+  - romneyVotes20012: number of votes for Romney, Election 2012
+  - obamaVotes2012: number of votes for Obama, Election 2012
+  - percentReport2012: proportion of precincts reporting, Election 2012
+  - county_latitude: latitude of county
+  - county_longitude: longitude of county
+  - votes_dem2016: number of votes for Democratic Party, Election 2016
+  - votes_gop2016: number of votes for GOP, Election 2016
+  - fips: unique identifier supplied from some elections
+  - White.population: population who identify as white
+  - Black.population: population who identify as black
+  - Education... (cols 33-40): population with specified education level
+  - PlACE.OF.BIRTH... (cols 41-47): population with specified place of birth
+  - LANGUAGE.SPOKE.AT.HOME... (cols 48-59): population with specified language abilities
+  - Total.households: number of households
+  - Less.than..10.000: population with income of less than $10,000
+  - X.[Numbers.to..Number] (cols 61-69): population with specified income range
+  
+## Validating Our Data with Summary Statistics
+
+author Kimberly Kao
+
+We perform a sanity check on our data for each election and 2010 census by examining the summary statistics.
+
+```{r summary}
+summary(election2016) # 2016 election
+summary(e2012DF) # 2012 election
+summary(election2008) # 2008 election
+summary(Df) # 2010 census
+summary(election2004) # 2004 election
+```
+Analysis:
+- 2016 Election: No NAs
+- 2012 Election: No NAs
+- 2008 Election: one NA for both Total Precincts and Precincts Reporting because missing data from web scraping
+- 2004 Election: No NAs
+- Census Data: 3 NAs for White.Population, 1529 NAs for Black.Population
+
+## Validating Our Data With Plots
+
+author: Margaret Chen
+
+
+### Map
+SOURCE:
+http://www.stat.wisc.edu/~gvludwig/327-5/maps#/12
+
+This part of the code extracts information from the maps package and matches it with the final merges data frame that the team has created. To make matching easier, I also extracted the FIPS information from the maps package to match with the maps package counties, matching them. Using the FIPS code, then, I merge the data frame created through the maps package and our final election/census/location data frame.
+
+```{r}
+#prepare map_data("county") data for merge
+mapCountyData = map_data("county")
+mapCountyData$id = gsub('[[:blank:]|[:punct:]]', '', ignore.case = TRUE, paste(mapCountyData$region, mapCountyData$subregion))
+mapCountyData$order_id = 1:nrow(mapCountyData)
+
+#match with FIPS in maps package
+data("county.fips")
+mapCountyFIPS = county.fips
+names(mapCountyFIPS) = c("fips", "id")
+mapCountyFIPS$id = gsub('[[:blank:]|[:punct:]]', '', mapCountyFIPS$id)
+
+#add FIPS information to maps package county data through the FIPS codes provided by the maps pacakge
+mapCounty = merge(x = mapCountyData, y = mapCountyFIPS, by = "id", all.x = TRUE)
+
+#assign FIPS to counties that are left out, using FIPS codes we have in our finalMerge data frame and matching by id's
+mapCounty$fips[is.na(mapCounty$fips)] = finalMerge$fips[match(mapCounty$id[is.na(mapCounty$fips)], finalMerge$id, nomatch = FALSE)]
+
+#assigns FIPS to finalMerge counties that are left out, using FIPS codes we have in our finalMerge data frame and matching by id's
+finalMerge$fips[is.na(finalMerge$fips)] = 
+
+#merge with election/census/longitude-latitude data
+finalMerge_maps = merge( x = finalMerge, y = mapCounty, by = "fips", all = TRUE )
+finalMerge_maps = finalMerge_maps[order(finalMerge_maps$order_id), ]
+names(finalMerge_maps)[c(2, 70)] = c("id_finalMerge", "id_mapCounty")
+
+```
+
+
+### Finding Missing Counties
+SOURCE:
+http://eriqande.github.io/rep-res-web/lectures/making-maps-with-R.html
+http://docs.ggplot2.org/0.9.3.1/scale_manual.html
+http://www.stat.columbia.edu/~tzheng/files/Rcolor.pdf
+https://cran.r-project.org/web/packages/maps/maps.pdf
+
+Using the data frame created in the previous section, we can plot the county data using ggplot2 and geom_poly(). The map is plotted with the fill aesthetics equated to a factor, so that if the county is not matched with the rest of the data frame, the county is colored in red. At the same time, to test that the longitude/latitude data makes sense, I've overlapped the plots on the map. Some vectors are also provided with desired results next to them.
+
+In addition, the list "missingValues" is also created to spot any NAs in each column of the finalMerge_maps data frame where there exists an id_mapCounty. In other words, we're looking for counties (as defined by the maps package) that have missing information in terms of census data, election data, etc. A more detailed explanation of the result is provided below the code chunk.
+
+```{r}
+#Preparation for plotting
+stateMapdata = map_data("state")
+stateBorders = geom_polygon(data = stateMapdata, aes(x = long, y = lat, group = group), fill = NA, color = "White", size = 1)
+
+no_background = theme_bw() + theme(
+  axis.text = element_blank(),
+  axis.line = element_blank(),
+  axis.ticks = element_blank(),
+  panel.border = element_blank(),
+  panel.grid = element_blank(),
+  axis.title = element_blank()
+)
+
+colorScale = c("red4", "red3", "tomato3", "tomato2", "tomato1", "deepskyblue1", "deepskyblue2", "deepskyblue3", "deepskyblue4", "blue3")
+colorScale0 = c("red4", "red3", "tomato3", "tomato2", "tomato1", "orchid3", "deepskyblue1", "deepskyblue2", "deepskyblue3", "deepskyblue4", "blue3") #probably should deepskyblue1 to make paler
+
+#Highlight Missing Counties
+unmatchedtoMapCounties = is.na(finalMerge_maps$id_finalMerge)
+missingCounties = ggplot() + geom_polygon(data = finalMerge_maps, aes(x = long, y = lat, group = group), fill = as.numeric(unmatchedtoMapCounties) + 1) + no_background + coord_fixed(1.3)
+missingCounties    #a completely black map means that there are no missing counties; mismatched counties should be highlighted in red
+
+addCountyLocation = missingCounties + geom_point(data = finalMerge_maps, aes(x = as.numeric(county_longitude), y = as.numeric(county_latitude)), color = "White", size = 0.2) + no_background + coord_fixed(1.3)
+addCountyLocation
+
+naInfinalMerge = unique(finalMerge_maps$id_mapCounty[is.na(finalMerge_maps$id_finalMerge)]) #mapCounty counties that have NA entries for finalMerge counties ==> the counties that didn't get plotted to the map
+naInfinalMerge #should be an empty vector
+
+#any other missing values
+missingValues = list()
+for (i in 1:ncol(finalMerge_maps)){
+  missingValues[[i]] = unique(finalMerge_maps$id_mapCounty[is.na(finalMerge_maps[i])])
+  names(missingValues)[i] = names(finalMerge_maps)[i]
+}
+
+missingValues = sapply(missingValues, unique) #delete duplicates
+
+```
+
+The missingValues list contains mostly empty vectors, with a few exceptions. We do not worry about them for the following reasons. The precint numbers for 2008 indicates there is missing information for Washington D.C., but since D.C. is essentially a city, this information is naturally missing - it's implied that, if D.C. is reported, "all" of its precincts are reported. On the other hand, census data appears to all be missing for three Texas counties: Kenedy, King, and Loving. According to their Wikipedia pages (cited below), however, they are three of the most populous counties in the United States, wish Loving County being the least populous at 82 people. For this reason, it is likely that certain demographic information becomes hard to calculate in the census. Within the census information also, there is 1527 missing values for the black population. Since African-Americans remain a minority in the United States, it is likely that many of these counties simply do not have a significant black population. The same goes for the entries that indicate NA's for white populations.
+
+SOURCES:
+https://en.wikipedia.org/wiki/Kenedy_County,_Texas
+https://en.wikipedia.org/wiki/Loving_County,_Texas
+https://en.wikipedia.org/wiki/King_County,_Texas
+
+### Election Results by Year and Size of Lead
+SOURCE:
+http://stackoverflow.com/questions/16566799/change-variable-name-in-for-loop-using-r (iterting variable names)
+http://www.statmethods.net/advgraphs/layout.html
+
+This section is dedicated to plotting the election results by year and size of lead, comparing them with online results as a sort of sanity check. The 2016 election results are compared visually to https://piazza.com/class/is6nbl2br3l6bd?cid=695.
+
+There is a helper function provided that takes in the size of lead (calculated as the difference between the Democratic vote and the Republican vote, divided by the total vote) and outputs a ggplot object that, when called, plots a map of the counties colored by size of lead. The function itself converts the size of lead to factors, then plugs the factors into the ggplot function.
+
+```{r}
+
+#Plotting Function
+plotMap = function(sizeLead){
+  
+  #the lead size is converted into a factor by rounding the size of lead in the two extremes (round down a negative number, round up a positive number) to avoid rounding to zero unless the lead is zero
+  sizeLead = factor(ifelse(sizeLead > 0, ceiling(sizeLead/0.2)*0.2, floor(sizeLead/0.2)*0.2))
+  
+  #plotting the function
+  ggplot() + geom_polygon(data = finalMerge_maps, aes(x = long, y = lat, group = group, fill = sizeLead), color = "Gray", size = 0.5) + scale_fill_manual(values = if( length(levels(sizeLead)) == 10 ){colorScale}else{colorScale0}) + stateBorders + coord_fixed(1.3) + no_background
+
+  }
+
+#2004 Election Results
+sizeLead2004 = (finalMerge_maps$kerryVote - finalMerge_maps$bushVote)/(finalMerge_maps$kerryVote + finalMerge_maps$bushVote) #NOTE: NO TOTAL VOTES FIGURE
+labels2004 = labs(title = 
+                      "2004 Election Results by Size of Lead")
+results2004 = plotMap(sizeLead2004) + labels2004
+
+#2008 Election Results
+sizeLead2008 = (finalMerge_maps$Obama2008 - finalMerge_maps$McCain2008) / (finalMerge_maps$Obama2008 + finalMerge_maps$McCain2008 + finalMerge_maps$Other2008)
+labels2008 = labs(title = 
+                      "2008 Election Results by Size of Lead")
+results2008 = plotMap(sizeLead2008) + labels2008
+
+#2012 Election Results
+sizeLead2012 = (finalMerge_maps$obamaVotes2012 - finalMerge_maps$romneyVotes2012)/(finalMerge_maps$obamaVotes2012 + finalMerge_maps$romneyVotes2012) #NOTE: NO TOTAL VOTES FIGURE
+labels2012 = labs(title = 
+                      "2012 Election Results by Size of Lead")
+results2012 = plotMap(sizeLead2012) + labels2012
+
+#2016 Election Results
+sizeLead2016 = (finalMerge_maps$votes_dem2016 - finalMerge_maps$votes_gop2016)/(finalMerge_maps$total_votes2016)
+labels2016 = labs(title = 
+                      "2016 Election Results by Size of Lead")
+results2016 = plotMap(sizeLead2016) + labels2016
+
+#arrange plots two-by-two. Red signals a Republican win, blue signals a Democratic win, and deeper colors represent larger leads
+grid.arrange(results2004, results2008, results2012, results2016, ncol = 2)
+
+```
+
+# 2016 Predictor variables added to dataframe
+
+```{r}
+result2016 = factor(x = (finalMerge$votes_dem2016 > finalMerge$votes_gop2016), levels = c(TRUE, FALSE), labels = c("Democratic", "Republican"))
+did_the_predictor_work = as.logical(testPreds == result2016)
+finalMerge = cbind(finalMerge, did_the_predictor_work, "Winner2016" = result2016)
+```
+
+
+# Save final dataframe into RDA
+```{r}
+finalMerge$fips = unlist(finalMerge$fips)
+save(finalMerge, file="finalMerge.rda")
+```
+
+
